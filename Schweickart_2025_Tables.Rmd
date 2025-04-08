@@ -1,0 +1,403 @@
+---
+title: "Schweickart_2025_Tables"
+output: html_document
+date: "2025-02-18"
+---
+
+```{r script/data loading, include=F}
+library(dplyr)
+library(gt)
+library(gtsummary)
+library(chanmetab)
+library(maplet)
+
+manuscript_folder <- "/udd/nhast/keto-metabolomics/SchweickartAnnalise_HypocaloricDiets_022025"
+
+source(paste0(manuscript_folder, "/Scripts/internal_functions.R"))
+
+########################
+##### DATA LOADING #####
+########################
+
+load(paste0(manuscript_folder, "/Processed_Data_and_Results/NHS_metadata_scores_df_maplet.Rdata"))
+load(paste0(manuscript_folder, "/Processed_Data_and_Results/NHS2_ExprSet_processed_maplet.RData"))
+load(paste0(manuscript_folder, "/Processed_Data_and_Results/Concordance_information.RData"))
+
+```
+
+
+
+# Table 1
+```{r TABLE_1, include=T}
+
+# Load in data, select and format relevant information
+
+##### NHS2 keto #####
+
+NHS2_all_keto_data <-  NHS2_all_keto_dat %>% 
+  get_quartiles_and_medians() %>% 
+  mutate(caco = as.character(ifelse(caco == "case", "Case", "Control"))) %>% 
+  mutate(menarc = as.numeric(menarc)) %>% 
+  mutate(par_num = as.numeric(par_num)) %>% 
+  mutate(current.smk = ifelse(current.smk == 0, "No", "Yes")) %>% 
+  mutate(
+    menopmh = 
+      case_when(
+         menopmh == "pre"~"Premenopausal",
+         menopmh == "post but not on PMH" ~ "Postmenopausal - no hormone use",
+         menopmh == "post on PMH" ~ "Postmenopausal - yes hormone use",
+         TRUE ~ "Unknown")) %>% 
+  mutate(meno_at_dx = case_when(caco == "Control" ~ NA,
+                                menopmh_at_dx == 1 ~ "Premenopausal",
+                                menopmh_at_dx != 1~"Postmenopausal")) %>%
+  mutate("Fasting at blood draw" = ifelse(fast == "nonfasting", 0, 1)) %>%
+  mutate(erpos = ifelse(erpos == 1, "ER +", "ER -")) %>% 
+  select(caco, ageyr, "Fasting at blood draw", menopmh, meno_at_dx, menarc, 
+         nulli, par_num, bbddx, familyhx, bmi18, weightchange, act, ahei_noal,
+         current.smk, alco, erpos, beta.score.cat, beta.score) %>% 
+  dplyr::rename("Age at blood draw (Years)" = ageyr,
+                "Menopausal status at diagnosis" = meno_at_dx,
+                'Weight Change since age 18 (kg)'=weightchange,
+                'Menopausal status and PMH use at Blood Draw' =menopmh,
+                'Activity levels at blood draw (MET-hours/week)' = act,
+                'Family History of breast cancer' = familyhx,
+                'History of benign breast disease' = bbddx,
+                'Age at menarche (Years)' = menarc,
+                'Alcohol Consumption at blood draw (g/day)'=  alco,
+                'Current Smoker' = current.smk,
+                "BMI at age 18 (kg/m²)" = bmi18,
+                "Nulliparous" = nulli,
+                "Parity, children" = par_num,
+                "ER Status" = erpos,
+                "Case/Control" = caco)
+
+
+##### NHS2 KD #####
+
+# Get p-values
+
+variables <- colnames(NHS2_all_keto_data)[c(2:4,6:13, 15:16)]
+variable_types <- c("continuous", "binary", "categorical", "continuous", 
+                    "binary", "continuous", "binary", "binary",
+                    "continuous","continuous","continuous",
+                    "binary", "continuous")
+p_value_column <- lapply(1:length(variables), function(i){
+  test_dat <- NHS2_all_keto_data %>%  filter(`Case/Control` == "Control")
+  if(variable_types[i]=="continuous"){
+      kruskal.test(as.character(test_dat$beta.score.cat)~test_dat[[variables[i]]])$p.value
+  }
+  else{
+    tbl <- table(test_dat[[variables[i]]], test_dat$beta.score.cat)
+    chisq.test(tbl)$p.value
+  }
+}) %>% unlist() %>% round(4)
+
+
+NHS2_keto_min <- summary(NHS2_all_keto_data%>% 
+                           filter(`Case/Control` == "Control") %>% 
+                           .$beta.score)["Min."] %>% round(2)
+NHS2_keto_first_quart <- summary(NHS2_all_keto_data%>% 
+                                   filter(`Case/Control` == "Control") %>% 
+                                   .$beta.score)["1st Qu."] %>% round(2)
+NHS2_keto_med <- summary(NHS2_all_keto_data%>% 
+                           filter(`Case/Control` == "Control") %>% 
+                           .$beta.score)["Median"] %>% round(2)
+NHS2_keto_third_quart <- summary(NHS2_all_keto_data%>% 
+                                   filter(`Case/Control` == "Control") %>% 
+                                   .$beta.score)["3rd Qu."] %>% round(2)
+NHS2_keto_max <- summary(NHS2_all_keto_data%>% 
+                           filter(`Case/Control` == "Control") %>% 
+                           .$beta.score)["Max."] %>% round(2)
+
+NHS2_all_keto_data %>% filter(`Case/Control`== "Control") %>% 
+  select(-c(`Case/Control`, `ER Status`, `Menopausal status at diagnosis`)) %>%
+  mutate(beta.score.cat = 
+           case_when(beta.score.cat == 1~
+                       paste0("Q1 (", NHS2_keto_min, " to ", 
+                              NHS2_keto_first_quart, ")"),
+                     beta.score.cat == 2~
+                       paste0("Q2 (", NHS2_keto_first_quart, " to ", 
+                              NHS2_keto_med, ")"),
+                     beta.score.cat == 3~
+                       paste0("Q3 (", NHS2_keto_med, " to ", 
+                              NHS2_keto_third_quart, ")"),
+                     beta.score.cat == 4 ~
+                       paste0("Q4 (", NHS2_keto_third_quart, " to ", 
+                              NHS2_keto_max, ")"),)) %>% 
+  select(-beta.score) %>% 
+  tbl_summary(by=beta.score.cat, missing = "no",
+              statistic = list(all_continuous() ~ "{mean} ({sd})"),
+              type = list( "Age at menarche (Years)" ~ "continuous",
+                           "Parity, children" ~ "continuous")) %>%
+  as_gt() %>%
+  tab_header(
+    title = md(
+        "**Cohort characteristics according to Ketogenic Diet Score quartiles in Nurses' Health Study II among controls**"
+        ),
+    subtitle = paste0("Controls = ",NHS2_all_keto_data %>% filter(`Case/Control`== "Control") %>% nrow())) 
+
+gt(data.frame(variables, variable_types, p_value_column))
+
+```
+
+# Table 2 
+
+
+``` {r TABLE_2}
+
+########################################
+##### Run association analyses #########
+########################################
+
+##### NHS2 #####
+
+
+# NHS2 Keto diet score exposure output
+overall_table <- table_output(NHS2_all_keto_dat,
+             "Association between quartiles of Ketogenic Diet score and breast cancer incidence, Nurses' Health Study II",
+             "Table2_NHS2_KD.docx", save = F)
+
+overall_table <- overall_table$`_data` %>% 
+  mutate(group = paste0("Overall Breast Cancer (",sum(NHS2_all_keto_dat$case==1), " cases/",sum(NHS2_all_keto_dat$case==0), " controls)" )) %>% 
+  mutate(het_p = NA) %>% 
+  dplyr::rename(row = `__GT_ROWNAME_PRIVATE__`) %>% 
+  select(group, row, Q1, Q2, Q3, Q4, `P-value of trend`, `Per SD increase`, `P-value`, het_p)
+
+
+
+# ER status
+er_table <- table_output(data_for_assoc = NHS2_all_keto_dat,
+             title = "Keto Diet Score association in NHSII stratified by ER status",
+             outfile = "Table3_NHS2_KD_ER.docx", 
+             conditional = F,
+             stratification = "ER",
+             save = F)
+er_table <- er_table$`_data` %>% select(group, row, Q1, Q2, Q3, Q4, `P-value of trend`, `Per SD increase`, `P-value`, het_p)
+
+
+# Menopausal status at blood draw
+meno_bld <- table_output(data_for_assoc = NHS2_all_keto_dat,
+             title = "Keto Diet Score association in NHSII stratified by menopausal status at blood draw",
+             outfile = "Table3_NHS2_KD_Meno_BD.docx", 
+             conditional = F,
+             stratification = "meno_blood_draw",
+             save = F)
+
+meno_bld <- meno_bld$`_data` %>% select(group, row, Q1, Q2, Q3, Q4, `P-value of trend`, `Per SD increase`, `P-value`, het_p)
+
+
+# Menopausal status at diagnosis
+meno_dx <- table_output(data_for_assoc = NHS2_all_keto_dat,
+             title = "Keto Diet Score association in NHSII stratified by menopausal status at diagnosis",
+             outfile = "Table3_NHS2_KD_Meno_DX.docx", 
+             conditional = F,
+             stratification = "meno_dx",
+             save = F)
+
+meno_dx <- meno_dx$`_data` %>% select(group, row, Q1, Q2, Q3, Q4, `P-value of trend`, `Per SD increase`, `P-value`, het_p)
+
+
+# Invasive vs. Non-invasive
+tumor_inv <- table_output(data_for_assoc = NHS2_all_keto_dat,
+             title = "Keto Diet Score association in NHSII stratified by Invasive vs non-invasive",
+             outfile = "Table3_NHS2_KD_Invas.docx", 
+             conditional = F,
+             stratification = "invasive",
+             save = F)
+
+tumor_inv <- tumor_inv$`_data` %>% select(group, row, Q1, Q2, Q3, Q4, `P-value of trend`, `Per SD increase`, `P-value`, het_p)
+
+rbind(overall_table, er_table, meno_bld, meno_dx, tumor_inv) %>% gt()
+
+```
+# Table 3
+``` {r TABLE_3}
+
+########################################
+##### Run association analyses #########
+########################################
+
+##### NHS2 #####
+
+
+# NHS2 Low-fat diet score exposure output
+overall_table <- table_output(NHS2_all_lfd_dat,
+             "Association between quartiles of Low-fat Diet score and breast cancer incidence, Nurses' Health Study II",
+             "Table2_NHS2_LFD.docx", save = F)
+
+overall_table <- overall_table$`_data` %>% 
+  mutate(group = paste0("Overall Breast Cancer (",sum(NHS2_all_lfd_dat$case==1), " cases/",sum(NHS2_all_lfd_dat$case==0), " controls)" )) %>% 
+  mutate(het_p = NA) %>% 
+  dplyr::rename(row = `__GT_ROWNAME_PRIVATE__`) %>% 
+  select(group, row, Q1, Q2, Q3, Q4, `P-value of trend`, `Per SD increase`, `P-value`, het_p)
+
+
+
+# ER status
+er_table <- table_output(data_for_assoc = NHS2_all_lfd_dat,
+             title = "Low-fat Diet Score association in NHSII stratified by ER status",
+             outfile = "Table3_NHS2_LFD_ER.docx", 
+             conditional = F,
+             stratification = "ER",
+             save = F)
+er_table <- er_table$`_data` %>% select(group, row, Q1, Q2, Q3, Q4, `P-value of trend`, `Per SD increase`, `P-value`, het_p)
+
+
+# Menopausal status at blood draw
+meno_bld <- table_output(data_for_assoc = NHS2_all_lfd_dat,
+             title = "Low-fat Diet Score association in NHSII stratified by menopausal status at blood draw",
+             outfile = "Table3_NHS2_LFD_Meno_BD.docx", 
+             conditional = F,
+             stratification = "meno_blood_draw",
+             save = F)
+
+meno_bld <- meno_bld$`_data` %>% select(group, row, Q1, Q2, Q3, Q4, `P-value of trend`, `Per SD increase`, `P-value`, het_p)
+
+
+# Menopausal status at diagnosis
+meno_dx <- table_output(data_for_assoc = NHS2_all_lfd_dat,
+             title = "Low-fat Diet Score association in NHSII stratified by menopausal status at diagnosis",
+             outfile = "Table3_NHS2_LFD_Meno_DX.docx", 
+             conditional = F,
+             stratification = "meno_dx",
+             save = F)
+
+meno_dx <- meno_dx$`_data` %>% select(group, row, Q1, Q2, Q3, Q4, `P-value of trend`, `Per SD increase`, `P-value`, het_p)
+
+
+# Invasive vs. Non-invasive
+tumor_inv <- table_output(data_for_assoc = NHS2_all_lfd_dat,
+             title = "Low-fat Diet Score association in NHSII stratified by Invasive vs non-invasive",
+             outfile = "Table3_NHS2_LFD_Invas.docx", 
+             conditional = F,
+             stratification = "invasive",
+             save = F)
+
+tumor_inv <- tumor_inv$`_data` %>% select(group, row, Q1, Q2, Q3, Q4, `P-value of trend`, `Per SD increase`, `P-value`, het_p)
+
+rbind(overall_table, er_table, meno_bld, meno_dx, tumor_inv) %>% gt()
+
+```
+
+
+# Supplementary Table 3
+```{r SUPPLEMENTARY_TABLE_3}
+##### NHS2 LFD #####
+
+NHS2_all_lfd_data <- NHS2_all_lfd_dat %>% 
+  get_quartiles_and_medians() %>% 
+  mutate(caco = as.character(ifelse(caco == "case", "Case", "Control"))) %>% 
+  mutate(menarc = as.numeric(menarc)) %>% 
+  mutate(par_num = as.numeric(par_num)) %>% 
+  mutate(current.smk = ifelse(current.smk == 0, "No", "Yes")) %>% 
+  mutate(
+    menopmh = 
+      case_when(
+        menopmh == "pre"~"Premenopausal",
+        menopmh == "post but not on PMH" ~ "Postmenopausal - no hormone use",
+        menopmh == "post on PMH" ~ "Postmenopausal - yes hormone use",
+        TRUE ~ "Unknown")) %>% 
+  mutate(meno_at_dx = case_when(caco == "Control" ~ NA,
+                                menopmh_at_dx == 1 ~ "Premenopausal",
+                                menopmh_at_dx != 1~"Postmenopausal")) %>%
+  mutate("Fasting at blood draw" = ifelse(fast == "nonfasting", 0, 1)) %>%
+  mutate(erpos = ifelse(erpos == 1, "ER +", "ER -")) %>% 
+  select(caco, ageyr, "Fasting at blood draw", menopmh, meno_at_dx, menarc, 
+         nulli, par_num, bbddx, familyhx, bmi18, weightchange, act, ahei_noal,
+         current.smk, alco, erpos, beta.score.cat, beta.score) %>% 
+  dplyr::rename("Age at blood draw (Years)" = ageyr,
+                "Menopausal status at diagnosis" = meno_at_dx,
+                'Weight Change since age 18 (kg)'=weightchange,
+                'Menopausal status and PMH use at Blood Draw' =menopmh,
+                'Activity levels at blood draw (MET-hours/week)' = act,
+                'Family History of breast cancer' = familyhx,
+                'History of benign breast disease' = bbddx,
+                'Age at menarche (Years)' = menarc,
+                'Alcohol Consumption at blood draw (g/day)'=  alco,
+                'Current Smoker' = current.smk,
+                "BMI at age 18 (kg/m²)" = bmi18,
+                "Nulliparous" = nulli,
+                "Parity, children" = par_num,
+                "ER Status" = erpos,
+                "Case/Control" = caco)
+
+
+########################################
+##### Diet score quartiles tables ######
+########################################
+
+
+
+##### NHS2 LFD #####
+NHS2_lfd_min <- summary(NHS2_all_lfd_data%>% 
+                          filter(`Case/Control` == "Control") %>% 
+                          .$beta.score)["Min."] %>% round(2)
+NHS2_lfd_first_quart <- summary(NHS2_all_lfd_data%>% 
+                                  filter(`Case/Control` == "Control") %>% 
+                                  .$beta.score)["1st Qu."] %>% round(2)
+NHS2_lfd_med <- summary(NHS2_all_lfd_data%>% 
+                          filter(`Case/Control` == "Control") %>% 
+                          .$beta.score)["Median"] %>% round(2)
+NHS2_lfd_third_quart <- summary(NHS2_all_lfd_data%>% 
+                                  filter(`Case/Control` == "Control") %>% 
+                                  .$beta.score)["3rd Qu."] %>% round(2)
+NHS2_lfd_max <- summary(NHS2_all_lfd_data%>% 
+                          filter(`Case/Control` == "Control") %>% 
+                          .$beta.score)["Max."] %>% round(2)
+
+NHS2_all_lfd_data %>% filter(`Case/Control`== "Control") %>% 
+  select(-c(`Case/Control`, `ER Status`, `Menopausal status at diagnosis`)) %>%
+  mutate(beta.score.cat = 
+           case_when(beta.score.cat == 1~
+                       paste0("Q1 (", NHS2_lfd_min, " to ", 
+                              NHS2_lfd_first_quart, ")"),
+                     beta.score.cat == 2~
+                       paste0("Q2 (", NHS2_lfd_first_quart, " to ", 
+                              NHS2_lfd_med, ")"),
+                     beta.score.cat == 3~
+                       paste0("Q3 (", NHS2_lfd_med, " to ", 
+                              NHS2_lfd_third_quart, ")"),
+                     beta.score.cat == 4 ~
+                       paste0("Q4 \n(", NHS2_lfd_third_quart, " to ", 
+                              NHS2_lfd_max, ")"),)) %>% 
+  select(-beta.score) %>% 
+  tbl_summary(by=beta.score.cat, missing = "no",
+              statistic = list(all_continuous() ~ "{mean} ({sd})"),
+              type = list( "Age at menarche (Years)" ~ "continuous",
+                           "Parity, children" ~ "continuous")) %>%
+  as_gt() %>%
+  tab_header(
+    title = md(
+      "**Cohort characteristics according to Low-fat Diet Score quartiles in Nurses' Health Study II among controls**"
+      ),
+    subtitle = paste0("N = ",NHS2_all_lfd_data %>% filter(`Case/Control`== "Control") %>% nrow())) 
+
+```
+
+
+
+# Fasting Case/control 
+``` {r Fasting_case_control}
+print(paste("Number of Fasting Cases = ", sum(NHS2_all_keto_dat %>% filter(fast != "nonfasting") %>% .$case == 1)))
+print(paste("Number of Fasting Controls = ", sum(NHS2_all_keto_dat %>% filter(fast != "nonfasting") %>% .$case == 0)))
+
+```
+
+# Supplementary Table 4
+``` {r SUPPLEMENTARY_TABLE_4}
+# NHS2 Keto diet score exposure output
+
+
+table_output(NHS2_all_keto_dat %>% filter(fast != "nonfasting"),
+             "Association between quartiles of Ketogenic Diet score and breast cancer incidence, Nurses' Health Study II (fasted samples only)",
+             "Table2_NHS2_KD_fasting.html", save =F)
+
+```
+# Supplementary Table 5
+``` {r SUPPLEMENTARY_TABLE_5}
+# NHS2 LFD score exposure output
+table_output(NHS2_all_lfd_dat %>% filter(fast != "nonfasting"),
+             "Association between quartiles of Low-fat Diet score and breast cancer incidence, Nurses' Health Study II (fasted samples only)",
+              "Table2_NHS2_LFD_fasting.html", save = F)
+```
+

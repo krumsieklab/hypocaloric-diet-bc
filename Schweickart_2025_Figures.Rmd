@@ -1,0 +1,568 @@
+---
+title: "Schweickart_2025_Technical_Review"
+output: html_document
+date: "2025-02-18"
+---
+
+```{r script/data loading, include=F}
+library(dplyr)
+library(maplet)
+library(viridis)
+library(ggrepel)
+library(cowplot)
+library(grid)
+library(openxlsx)
+library(readr)
+library(reshape2)
+
+setwd("~/Downloads/NHS_for_jan")
+#source("internal_functions.R")
+
+
+########################
+##### DATA LOADING #####
+########################
+
+# Input file names
+betas_file <- "filtered_betas.xlsx"
+
+mets_res_file <- "known_mets_association_results.xlsx"
+
+KD_knowns_file <- "KD_known_metabolites_processed_batch_corrected.xlsx"
+
+LFD_knowns_file <- "LFD_known_metabolites_processed.xlsx"
+
+MWAS_file <- "NHS2.MWAS.withBMI.csv"
+
+# Load in data
+
+load("Concordance_information.RData")
+
+mets_res <- read.xlsx(mets_res_file)
+
+KD_SE <- mt_load_se_xls(file = KD_knowns_file)
+
+LFD_SE <- mt_load_se_xls(file = LFD_knowns_file)
+
+rownames(KD_SE) <- rowData(KD_SE)$HMDB_ID
+
+rownames(LFD_SE) <- rowData(LFD_SE)$HMDB_ID
+
+NHS2_mets_kd <- read.xlsx(betas_file, sheet = "NHS2_betas_all_keto")
+NHS2_mets_lfd <- read.xlsx(betas_file, sheet ="NHS2_betas_all_lfd")
+
+NHS2_MWAS <- read_csv(MWAS_file)
+
+palette <- magma(10)
+
+
+##### Combine metabolite fold-change and MWAS data #####
+NHS2_mets_res_kd <- mets_res %>% 
+  filter(HMDB_ID %in% NHS2_mets_kd$HMDB_ID) %>% 
+  filter(KD_change_p_adj < 0.05) %>% 
+  merge(NHS2_MWAS, by.x = "HMDB_ID", by.y = "hmdb.id")
+
+
+NHS2_mets_res_lfd <- mets_res %>% 
+  filter(HMDB_ID %in% NHS2_mets_lfd$HMDB_ID) %>% 
+  filter(LFD_change_p_adj < 0.05) %>% 
+  merge(NHS2_MWAS, by.x = "HMDB_ID", by.y = "hmdb.id") 
+
+NHS2_mets_res_all <- rbind(NHS2_mets_res_kd,
+                           NHS2_mets_res_lfd) %>% 
+  distinct()
+```
+# Figure 1a
+``` {r fig.width=10,fig.height=15}
+
+
+
+#########################################
+#### Figure 1 a and c Forest plots ######
+########################################
+
+forest_plot <- function(change_df){
+  ggplot(change_df, aes(x=LFD_mean, y=metabolite_name))+
+  geom_vline(xintercept=0, color="black")+
+  geom_linerange(aes(xmin=LFD_lower, xmax=LFD_upper), linewidth = 2, color = magma(10)[5])+
+  geom_point( aes(x= LFD_mean, y=metabolite_name),shape=21, size=5, fill = magma(10)[5], color="black") +
+  geom_linerange(aes(xmin=KD_lower, xmax=KD_upper),linewidth=2,color = magma(10)[9])+
+  geom_point(aes(x=KD_mean, y = metabolite_name), shape=21, size=5, fill = magma(10)[9], color="black") +
+  facet_grid(as.formula(sprintf("Molecular.Annotation~.")), scales = "free_y", space = "free_y") +
+  xlab("Fold Change with 95% confidence interval") +
+  ylab("Metabolite")+
+  theme(strip.background =element_rect(fill=NA),
+        strip.text = element_text(colour = 'black', face = "bold", size=12),
+        strip.text.y = element_text(angle = 0, hjust = 0),
+        axis.text=element_text(size=12),
+        axis.title = element_text(size=12),
+        panel.grid.major.y = element_line(color ="gray"),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        panel.background = element_rect(fill=NA, color ="black"))+
+  xlim(min(c(change_df$KD_lower, change_df$LFD_lower)), max(c(change_df$KD_upper, change_df$LFD_upper)))
+}
+
+NHS2_mets_res_all$metabolite_name[NHS2_mets_res_all$metabolite_name=="N-alpha-acetyarginine"] <-"N-alpha-acetylarginine"
+NHS2_mets_res_all$Molecular.Annotation[NHS2_mets_res_all$metabolite_name=="histidine"] <-"Amino Acid"
+
+NHS2_mets_res_all$metabolite_name[NHS2_mets_res_all$metabolite_name=="alpha-hydroxybutyrate/beta-hydroxybutyrate/hydroxyisobutyrate"] <-"2,3-hydroxybutyrate"
+NHS2_mets_res_all$Molecular.Annotation[NHS2_mets_res_all$Molecular.Annotation == "Plasmologen"]<-"Plasmalogen"
+overlap_pathways <- c("Acylcarnitine", "Cholesterol Ester", "Phosphatidylcholine","Plasmalogen", "Sphingomyelin", "Ketone Body")
+#Overlapping changes
+forest_plot(NHS2_mets_res_all %>% 
+              filter(Molecular.Annotation %in% overlap_pathways) %>% 
+              filter(KD_change_p_adj < 0.05 &LFD_change_p_adj < 0.05) %>% 
+              filter(!(metabolite_name %in% c("C40:10 PC", "C36:2 PE plasmalogen"))))
+```
+# Figure 1c 
+```{r fig.width=10,fig.height=4}
+NHS2_mets_res_all %<>% mutate(Molecular.Annotation = ifelse(grepl("acetyl",metabolite_name), "N-acetyl Amino Acids", Molecular.Annotation))
+
+forest_plot(NHS2_mets_res_all %>% 
+              filter(Molecular.Annotation %in% c("Amino Acid","N-acetyl Amino Acids")) %>% 
+              filter(KD_change_p_adj < 0.05  ||
+                       LFD_change_p_adj < 0.05))
+
+```
+
+# Figure 1b
+```{r fig.width=12,fig.height=11}
+
+########################################
+##### Figure 1b Triglyceride Plots #####
+########################################
+trigs_plot_df_KD <- NHS2_mets_res_all %>% 
+  filter(fa_type == "TG") %>% 
+  select(length, saturation, KD_change_p_adj, estimate.x) %>% 
+  dplyr::rename(p_adj = KD_change_p_adj, estimate=estimate.x)
+trigs_plot_df_lfd <- NHS2_mets_res_all %>% 
+  filter(fa_type == "TG") %>% 
+  select(length, saturation, LFD_change_p_adj, estimate.y) %>% 
+  dplyr::rename(p_adj = LFD_change_p_adj, estimate=estimate.y)
+
+trigs_plot_df <- rbind(trigs_plot_df_KD, trigs_plot_df_lfd)
+trigs_plot_df$diet <- c(rep("KD", times = nrow(trigs_plot_df_KD)),
+                        rep("LFD", times = nrow(trigs_plot_df_lfd)))
+trigs_plot_df %<>% mutate(shape = case_when(p_adj > 0.05 ~ "insignificant",
+                                 estimate < 0 ~ "abundance down",
+                                 estimate > 0 ~ "abundance up"))
+
+# New facet label names for supp variable
+supp.labs <- c("Ketogenic Diet", "Low-fat Diet")
+names(supp.labs) <- c("KD", "LFD")
+
+ggplot(trigs_plot_df, aes(x=length, y = saturation, fill = estimate, size = -log10(p_adj), color = estimate, shape = shape))+
+  geom_point()+
+  theme_minimal() + 
+  labs( color="Fold Change", shape = "Direction of change")+
+  scale_fill_viridis(option = "plasma")+
+  scale_color_viridis(option = "plasma",breaks = c(-1.5, 0, 1.5))+
+  scale_shape_manual(values=c(24,25,21), name= "Direction of change",labels = c("Increased Abundance", "Decreased Abundance", "Insignificant"))+
+  scale_size_continuous(range = c(0, 15), name="-log10(Adjusted p)")+
+  ggtitle("Triglyceride changes on the Calorically Restricted Diets") + 
+  xlab("Chain Length") + 
+  ylab("Saturation (# of Double Bonds)") +
+  theme(legend.title = element_text(size=20),
+        legend.text = element_text(size=20),
+        axis.text=element_text(size=16),
+        axis.title=element_text(size=20,face="bold"),
+        title = element_text(size=20, face="bold"),
+        strip.text.x = element_text(
+          size = 20, face = "bold"
+        ),
+        panel.border = element_rect(color = "black", 
+                                    fill = NA, 
+                                    size = 0.5),
+        legend.position = "bottom",
+        legend.box = "horizontal") +
+
+  guides(fill = "none", 
+         size= guide_legend(override.aes = list(shape = 25, fill = 'black'), title.position = "top", title.hjust = 0.5), 
+         shape = guide_legend(override.aes = list(size=8 ), ncol = 1, title.position = "top", title.hjust = 0.5),
+         color = guide_colorbar(title.position = "top", title.hjust=0.5, ticks = F, barwidth = 15, ))+
+  facet_wrap(~diet, labeller = labeller(diet =  supp.labs))
+
+```
+
+# Figure 2 a
+```{r fig.width=8,fig.height=9}
+top_fc_kd <- max(abs(kd_merged$Metabolite_FC))
+
+fig_2a_plot_df <- kd_merged %>% 
+  merge(NHS2_mets_res_kd, by ="HMDB_ID") %>% 
+  mutate(fc_scaled = Metabolite_FC/top_fc_kd)
+
+
+fig_2a_plot_df$Metabolite.x[fig_2a_plot_df$Metabolite.x=="alpha-hydroxybutyrate/beta-hydroxybutyrate/hydroxyisobutyrate"] <-"2,3-hydroxybutyrate"
+fig_2a_plot_df$Metabolite.x[fig_2a_plot_df$Metabolite.x=="CAR(4:0(OH))"] <-"C4-OH carnitine"
+fig_2a_plot_df$Metabolite.x[fig_2a_plot_df$Metabolite.x=="PC(P-36:4)/PC(O-36:5)_B"] <-"PC(P-36:4)/PC(O-36:5)"
+
+kd_mets_to_label <- c("DG(36:2)","TG(54:2)", "DG(38:5)", "Acetaminophen", "CE(18:3)", "CE(20:3)", "N-Oleoyl glycine",  "2,3-hydroxybutyrate", "C4-OH carnitine")
+
+fig_2a_plot_df %<>% mutate(label = ifelse(Metabolite.x %in% kd_mets_to_label, Metabolite.x, "")) 
+
+
+ggplot(fig_2a_plot_df, aes(x = Metabolite_FC, 
+                                     y = NHSII_concordance, 
+                                     label = label, 
+                                     color = abs(NHSII_concordance - fc_scaled)))+
+  geom_point(size =4)+  geom_smooth(method = "lm", se = TRUE, color = "darkmagenta") +geom_label_repel(color = "black", size=6) +
+  scale_color_viridis_c(option="plasma")+
+  theme_minimal()+ylab("Metabolite Concordance in NHSII")+
+  xlab("Metabolite Fold Change in Controlled Trial")+
+  theme(strip.placement = "outside",          # Place facet titles outside the plot area
+        strip.text.y = element_text(angle = 0),  # Optional: Control facet title text orientation
+        axis.text=element_text(size=16,  family="Helvetica"),
+        axis.title=element_text(size=16,face="bold",  family="Helvetica"),
+        title = element_text(size=16, face="bold",  family="Helvetica"),
+        legend.text=element_text(size=15)) +
+  guides(color = guide_legend(title=""))
+
+
+
+```
+
+# Figure 2b
+```{r fig.width=8,fig.height=9}
+
+
+####################################
+##### LFD Concordance plots ########
+####################################
+
+top_fc_lfd <- max(abs(lfd_merged$Metabolite_FC))
+
+fig_2b_plot_df <- lfd_merged %>% 
+  merge(NHS2_mets_res_lfd, by ="HMDB_ID") %>% 
+  mutate(fc_scaled = Metabolite_FC/top_fc_lfd)
+
+lfd_mets_to_label <- c( "PE(40:6)","PE(38:6)", "Acetaminophen", "N-Oleoyl glycine",   "N1-Acetylspermidine","CE(18:3)","CE(18:0)")
+
+fig_2b_plot_df %<>% mutate(label = ifelse(Metabolite.x %in% lfd_mets_to_label, Metabolite.x, "")) 
+ggplot(fig_2b_plot_df, aes(x = Metabolite_FC, y = NHSII_concordance, label = label, color = abs(NHSII_concordance - fc_scaled)))+
+  geom_point(size  =4)+  geom_smooth(method = "lm", se = TRUE, color = "darkmagenta") +geom_label_repel(color = "black", size =6) +
+  scale_color_viridis_c(option="plasma")+
+  theme_minimal()+ylab("Metabolite Concordance in NHSII")+xlab("Metabolite Fold Change in Controlled Trial")+
+  theme(strip.placement = "outside",          # Place facet titles outside the plot area
+        strip.text.y = element_text(angle = 0),  # Optional: Control facet title text orientation
+        axis.text=element_text(size=16,  family="Helvetica"),
+        axis.title=element_text(size=16,face="bold",  family="Helvetica"),
+        title = element_text(size=16, face="bold",  family="Helvetica"),
+        legend.text=element_text(size=15)) +
+  guides(color = guide_legend(title=""))
+
+```
+
+# Figure 2c
+```{r fig.width=8,fig.height=13}
+
+top_positive_concordance_mets_kd <- fig_2a_plot_df %>% 
+  select(NHSII_concordance, Metabolite.x) %>% 
+  arrange(desc(NHSII_concordance)) %>% 
+  .[1:4,] %>% .$Metabolite.x %>% 
+  unique() %>% 
+  rev()
+
+fig2c_kd_top_pos_plot_df<- fig_2a_plot_df %>% 
+  select(NHSII_concordance, fc_scaled, Metabolite.x) %>% 
+  melt(id.vars =c("Metabolite.x")) %>% 
+  filter(Metabolite.x %in% top_positive_concordance_mets_kd) %>% 
+  mutate(variable = ifelse(variable == "NHSII_concordance", "NHSII Concordance", "Scaled Fold Change"))
+
+fig2c_kd_top_pos_plot_df$Metabolite.x <- 
+  factor(fig2c_kd_top_pos_plot_df$Metabolite.x, 
+         levels = top_positive_concordance_mets_kd)
+
+fig2c_kd_top_pos_plot <- ggplot(fig2c_kd_top_pos_plot_df,
+                                aes(x = value, y = Metabolite.x, color = variable)) +
+  geom_point(size =5) +
+  scale_color_manual(values = palette[c(3,7)])+
+  labs(
+    title = "Metabolites with strongest positive observed effect",
+    x = "",
+    y= NULL,
+    fill = "Group"
+  ) +
+  theme_minimal() +
+  theme(strip.placement = "outside",          # Place facet titles outside the plot area
+        strip.text.y = element_text(angle = 0),  # Optional: Control facet title text orientation
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.text=element_text(size=16,  family="Helvetica"),
+        axis.title=element_text(size=16,face="bold",  family="Helvetica"),
+        title = element_text(size=16, face="bold",  family="Helvetica")) +  # Rotate x-axis labels for clarity
+  xlim(-0.8, 0.8)
+
+top_negative_concordance_mets_kd <- fig_2a_plot_df %>% 
+  select(NHSII_concordance, Metabolite.x) %>% 
+  arrange(NHSII_concordance) %>% 
+  .[1:8,] %>% .$Metabolite.x %>% 
+  unique()
+
+fig2c_kd_top_neg_plot_df<- fig_2a_plot_df %>% 
+  select(NHSII_concordance, fc_scaled, Metabolite.x) %>% 
+  melt(id.vars =c("Metabolite.x")) %>% 
+  filter(Metabolite.x %in% top_negative_concordance_mets_kd) %>% 
+  mutate(variable = ifelse(variable == "NHSII_concordance", "NHSII Concordance", "Scaled Fold Change"))
+
+fig2c_kd_top_neg_plot_df$Metabolite.x <- 
+  factor(fig2c_kd_top_neg_plot_df$Metabolite.x, 
+         levels = top_negative_concordance_mets_kd)
+
+fig2c_kd_top_neg_plot <- ggplot(fig2c_kd_top_neg_plot_df, 
+                            aes(x = value, y = Metabolite.x, color = variable)) +
+  geom_point(size =5) +
+  scale_color_manual(values = palette[c(3,7)])+
+  labs(
+    title = "Metabolites with strongest negative observed effect",
+    x = "",
+    y= NULL,
+    fill = "Group"
+  ) +
+  theme_minimal() +
+  theme(strip.placement = "outside",          # Place facet titles outside the plot area
+        strip.text.y = element_text(angle = 0),  # Optional: Control facet title text orientation
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.text=element_text(size=16,  family="Helvetica"),
+        axis.title=element_text(size=16,face="bold",  family="Helvetica"),
+        title = element_text(size=16, face="bold",  family="Helvetica")) +  # Rotate x-axis labels for clarity
+  xlim(-0.8, 0.8)
+
+
+different_concordance_mets_kd <- kd_mets_to_label
+
+fig2c_kd_diff_plot_df<- fig_2a_plot_df %>% 
+  select(NHSII_concordance, fc_scaled, Metabolite.x) %>% 
+  melt(id.vars =c("Metabolite.x")) %>% 
+  filter(Metabolite.x %in% different_concordance_mets_kd) %>% 
+  mutate(variable = ifelse(variable == "NHSII_concordance", "NHSII Concordance", "Scaled Fold Change"))
+
+fig2c_kd_diff_plot_df$Metabolite.x <- 
+  factor(fig2c_kd_diff_plot_df$Metabolite.x, 
+         levels = different_concordance_mets_kd)
+
+
+fig2c_kd_diff_plot <- ggplot(fig2c_kd_diff_plot_df, aes(x = value, y =Metabolite.x, color = variable)) +
+  geom_point(size =5) +
+  scale_color_manual(values = palette[c(3,7)])+
+  labs(
+    title = "Metabolites with discordant effects",
+    x = "",
+    y = NULL,
+    fill = "Group"
+  ) +
+  theme_minimal() +
+  theme(strip.placement = "outside",          # Place facet titles outside the plot area
+        strip.text.y = element_text(angle = 0),  # Optional: Control facet title text orientation
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.text=element_text(size=16,  family="Helvetica"),
+        axis.title=element_text(size=16,face="bold",  family="Helvetica"),
+        title = element_text(size=16, face="bold",  family="Helvetica")) +  # Rotate x-axis labels for clarity
+  xlim(-0.8, 1.01)
+
+aligned_plots <- align_plots(fig2c_kd_top_pos_plot, fig2c_kd_diff_plot, fig2c_kd_top_neg_plot, align = "hv", axis = "l")
+
+
+# Combine the plots with specified relative heights
+kd_combined_plot <- plot_grid(
+  aligned_plots[[1]], aligned_plots[[2]], aligned_plots[[3]],
+  ncol = 1,                 # Stack vertically
+  rel_heights = c(5,8,7)     # Adjust relative heights
+)
+
+grid.draw(kd_combined_plot)
+```
+# Figure 2d
+```{r fig.width=8,fig.height=13}
+top_positive_concordance_mets_lfd <- fig_2b_plot_df %>% 
+  select(NHSII_concordance, Metabolite.x) %>% 
+  arrange(desc(NHSII_concordance)) %>% 
+  .[1:6,] %>% .$Metabolite.x %>% 
+  unique() %>% 
+  rev()
+
+fig2d_lfd_top_pos_plot_df<- fig_2b_plot_df %>% 
+  select(NHSII_concordance, fc_scaled, Metabolite.x) %>% 
+  melt(id.vars =c("Metabolite.x")) %>% 
+  filter(Metabolite.x %in% top_positive_concordance_mets_lfd) %>% 
+  mutate(variable = ifelse(variable == "NHSII_concordance", "NHSII Concordance", "Scaled Fold Change"))
+
+fig2d_lfd_top_pos_plot_df$Metabolite.x <- 
+  factor(fig2d_lfd_top_pos_plot_df$Metabolite.x, 
+         levels = top_positive_concordance_mets_lfd)
+
+fig2d_lfd_top_pos_plot <- ggplot(fig2d_lfd_top_pos_plot_df,
+                                aes(x = value, y = Metabolite.x, color = variable)) +
+  geom_point(size =5) +
+  scale_color_manual(values = palette[c(3,7)])+
+  labs(
+    title = "Metabolites with strongest positive observed effect",
+    x = "",
+    y= NULL,
+    fill = "Group"
+  ) +
+  theme_minimal() +
+  theme(strip.placement = "outside",          # Place facet titles outside the plot area
+        strip.text.y = element_text(angle = 0),  # Optional: Control facet title text orientation
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.text=element_text(size=16,  family="Helvetica"),
+        axis.title=element_text(size=16,face="bold",  family="Helvetica"),
+        title = element_text(size=16, face="bold",  family="Helvetica")) +  # Rotate x-axis labels for clarity
+  xlim(-1, 1)
+
+top_negative_concordance_mets_lfd <- fig_2b_plot_df %>% 
+  select(NHSII_concordance, Metabolite.x) %>% 
+  arrange(NHSII_concordance) %>% 
+  .[1:9,] %>% .$Metabolite.x %>% 
+  unique()
+
+fig2d_lfd_top_neg_plot_df<- fig_2b_plot_df %>% 
+  select(NHSII_concordance, fc_scaled, Metabolite.x) %>% 
+  melt(id.vars =c("Metabolite.x")) %>% 
+  filter(Metabolite.x %in% top_negative_concordance_mets_lfd) %>% 
+  mutate(variable = ifelse(variable == "NHSII_concordance", "NHSII Concordance", "Scaled Fold Change"))
+
+fig2d_lfd_top_neg_plot_df$Metabolite.x <- 
+  factor(fig2d_lfd_top_neg_plot_df$Metabolite.x, 
+         levels = top_negative_concordance_mets_lfd)
+
+fig2d_lfd_top_neg_plot <- ggplot(fig2d_lfd_top_neg_plot_df, 
+                                aes(x = value, y = Metabolite.x, color = variable)) +
+  geom_point(size =5) +
+  scale_color_manual(values = palette[c(3,7)])+
+  labs(
+    title = "Metabolites with strongest negative observed effect",
+    x = "",
+    y= NULL,
+    fill = "Group"
+  ) +
+  theme_minimal() +
+  theme(strip.placement = "outside",          # Place facet titles outside the plot area
+        strip.text.y = element_text(angle = 0),  # Optional: Control facet title text orientation
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.text=element_text(size=16,  family="Helvetica"),
+        axis.title=element_text(size=16,face="bold",  family="Helvetica"),
+        title = element_text(size=16, face="bold",  family="Helvetica")) +  # Rotate x-axis labels for clarity
+  xlim(-1, 1)
+
+
+different_concordance_mets_lfd <- lfd_mets_to_label
+
+fig2d_lfd_diff_plot_df<- fig_2b_plot_df %>% 
+  select(NHSII_concordance, fc_scaled, Metabolite.x) %>% 
+  melt(id.vars =c("Metabolite.x")) %>% 
+  filter(Metabolite.x %in% different_concordance_mets_lfd) %>% 
+  mutate(variable = ifelse(variable == "NHSII_concordance", "NHSII Concordance", "Scaled Fold Change"))
+
+fig2d_lfd_diff_plot_df$Metabolite.x <- 
+  factor(fig2d_lfd_diff_plot_df$Metabolite.x, 
+         levels = different_concordance_mets_lfd)
+
+
+fig2d_lfd_diff_plot <- ggplot(fig2d_lfd_diff_plot_df, aes(x = value, y =Metabolite.x, color = variable)) +
+  geom_point(size =5) +
+  scale_color_manual(values = palette[c(3,7)])+
+  labs(
+    title = "Metabolites with discordant effects",
+    x = "",
+    y = NULL,
+    fill = "Group"
+  ) +
+  theme_minimal() +
+  theme(strip.placement = "outside",          # Place facet titles outside the plot area
+        strip.text.y = element_text(angle = 0),  # Optional: Control facet title text orientation
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.text=element_text(size=16,  family="Helvetica"),
+        axis.title=element_text(size=16,face="bold",  family="Helvetica"),
+        title = element_text(size=16, face="bold",  family="Helvetica")) +  # Rotate x-axis labels for clarity
+  xlim(-1, 1)
+
+aligned_plots <- align_plots(fig2d_lfd_top_pos_plot, fig2d_lfd_diff_plot, fig2d_lfd_top_neg_plot,align = "hv", axis = "l")
+
+
+# Combine the plots with specified relative heights
+lfd_combined_plot <- plot_grid(
+  aligned_plots[[1]], aligned_plots[[2]], aligned_plots[[3]],
+  ncol = 1,                 # Stack vertically
+  rel_heights = c(6,6,8)     # Adjust relative heights
+)
+grid.draw(lfd_combined_plot)
+
+
+```
+
+# Figure 3a-d
+```{r fig.width=12,fig.height=11}
+############################################
+##### Figure 3 MWAS correlation plots ######
+############################################
+
+fig3_kd_plot_df <- merge(kd_merged, NHS2_mets_res_kd, by = "HMDB_ID") %>% 
+  mutate(fc_fill = abs(scale(Metabolite_FC) - scale(coef)))
+
+fig3_kd_plot_df$Metabolite.x[fig3_kd_plot_df$Metabolite.x=="CAR(4:0(OH))"] <-"C4-OH carnitine"
+fig3_kd_plot_df$Metabolite.x[fig3_kd_plot_df$Metabolite.x=="PE(P-40:6)/PE(O-40:7)"] <-"Plasmalogen (40:6)"
+
+fig3_kd_mets_to_label <- c("TG(46:1)", "N-Oleoyl glycine", "Plasmalogen (40:6)", "LPC(20:1)", "CE(22:6)",  "C4-OH carnitine")
+
+fig3_kd_plot_df %<>% mutate(label = ifelse(Metabolite.x %in% fig3_kd_mets_to_label, Metabolite.x, "")) 
+
+fig3a_kd <- ggplot(fig3_kd_plot_df, aes(x=Metabolite_FC, y = coef, fill = fc_fill, label = label)) +
+  geom_point(shape=21,cex = 5, color = "black") +
+  scale_fill_viridis_c(option = "plasma")+
+  geom_label_repel(color = "black", fill = "white",size=6,
+                   min.segment.length = unit(0, 'lines')) +
+  annotate(geom="text", y = 0.17,x = -0.7, size=8,
+           label =paste0("Pearson Correlation: ",
+                         round(cor.test(fig3_kd_plot_df$Metabolite_FC,
+                                        fig3_kd_plot_df$coef)$estimate,3)))+
+  theme_minimal()+
+  theme(axis.text.x  =element_text(size =15),
+        axis.text.y  =element_text(size = 15),
+        axis.title = element_text(size = 15),
+        legend.text = element_text(size=15))+
+  xlab("Metabolite Fold Change")+
+  ylab("Metabolite BC Regression Coefficient")+
+  guides(fill = guide_legend(title=""))
+
+
+fig3_lfd_plot_df <- merge(lfd_merged, NHS2_mets_res_lfd, by = "HMDB_ID") %>% 
+  mutate(fc_fill = abs(scale(Metabolite_FC) - scale(coef)))
+
+fig3_lfd_plot_df$Metabolite.x[fig3_lfd_plot_df$Metabolite.x=="CAR(4:0(OH))"] <-"C4-OH carnitine"
+
+fig3_lfd_mets_to_label <- c("Biliverdin", "N1-Acetylspermidine", "N-Oleoyl glycine", "CE(22:6)",  "C4-OH carnitine", "Piperine", "Cotinine","TG(52:1)","TG(52:0)", "TG(50:0)")
+
+fig3_lfd_plot_df %<>% mutate(label = ifelse(Metabolite.x %in% fig3_lfd_mets_to_label, Metabolite.x, "")) 
+
+
+fig3a_lfd <- ggplot(fig3_lfd_plot_df, aes(x=Metabolite_FC, y = coef, fill=fc_fill, label = label)) +
+  geom_point(shape=21,cex = 5,color="black") +
+  annotate(geom="text", y = 0.17,x = -0.7, size=8,
+           label =paste0("Pearson Correlation: ",
+                         round(cor.test(fig3_lfd_plot_df$Metabolite_FC,
+                                        fig3_lfd_plot_df$coef)$estimate,3)))+
+  scale_fill_viridis_c(option = "plasma")+
+  geom_label_repel(color = "black", fill = "white",size=6,
+                   min.segment.length = unit(0, 'lines')) +
+  theme_minimal()+
+  theme(axis.text.x  =element_text(size =15),
+        axis.text.y  =element_text(size = 15),
+        axis.title = element_text(size=15),
+        legend.text = element_text(size=15))+
+  xlab("Metabolite Fold Change")+
+  ylab("Metabolite BC Regression Coefficient")+
+  guides(fill = guide_legend(title=""))
+
+
+
+combine_plot <-
+  plot_grid(
+    fig3a_kd, fig3a_lfd,
+    ncol = 2                # Stack vertically
+  )
+combine_plot
+
+
+```
+
