@@ -1,16 +1,9 @@
 ---
-title: "Schweickart_2025_Tables"
+title: "Schweickart_2025_Technical_Review"
 output: html_document
 date: "2025-02-18"
 ---
-
 ```{r script/data loading, include=F}
-library(dplyr)
-library(gt)
-library(gtsummary)
-library(chanmetab)
-library(maplet)
-
 manuscript_folder <- "/udd/nhast/keto-metabolomics/SchweickartAnnalise_HypocaloricDiets_022025"
 
 source(paste0(manuscript_folder, "/Scripts/internal_functions.R"))
@@ -23,13 +16,19 @@ load(paste0(manuscript_folder, "/Processed_Data_and_Results/NHS_metadata_scores_
 load(paste0(manuscript_folder, "/Processed_Data_and_Results/NHS2_ExprSet_processed_maplet.RData"))
 load(paste0(manuscript_folder, "/Processed_Data_and_Results/Concordance_information.RData"))
 
+nhs2_pheno_file <- # Contains covariates/metadata of NHS2 subjects
+  "/udd/recpe/Metabolomics/KetoMetabolomics/nhs2final.sas7bdat"
+
+nhs2_meno_er_file <- # Contains ER and menopausal status of cancer in NHS2
+  "~/keto-metabolomics/Data processing/data_mtbl_nhs2_18DEC18.csv"
+
+
 ```
 
 
 
 # Table 1
 ```{r TABLE_1, include=T}
-
 # Load in data, select and format relevant information
 
 ##### NHS2 keto #####
@@ -138,12 +137,12 @@ NHS2_all_keto_data %>% filter(`Case/Control`== "Control") %>%
 
 gt(data.frame(variables, variable_types, p_value_column))
 
+
 ```
 
 # Table 2 
 
-
-``` {r TABLE_2}
+```{r TABLE_2}
 
 ########################################
 ##### Run association analyses #########
@@ -153,135 +152,71 @@ gt(data.frame(variables, variable_types, p_value_column))
 
 
 # NHS2 Keto diet score exposure output
-overall_table <- table_output(NHS2_all_keto_dat,
+overall_table_kd <- table_output(NHS2_all_keto_dat,
              "Association between quartiles of Ketogenic Diet score and breast cancer incidence, Nurses' Health Study II",
              "Table2_NHS2_KD.docx", save = F)
 
-overall_table <- overall_table$`_data` %>% 
-  mutate(group = paste0("Overall Breast Cancer (",sum(NHS2_all_keto_dat$case==1), " cases/",sum(NHS2_all_keto_dat$case==0), " controls)" )) %>% 
-  mutate(het_p = NA) %>% 
-  dplyr::rename(row = `__GT_ROWNAME_PRIVATE__`) %>% 
-  select(group, row, Q1, Q2, Q3, Q4, `P-value of trend`, `Per SD increase`, `P-value`, het_p)
-
-
-
-# ER status
-er_table <- table_output(data_for_assoc = NHS2_all_keto_dat,
-             title = "Keto Diet Score association in NHSII stratified by ER status",
-             outfile = "Table3_NHS2_KD_ER.docx", 
-             conditional = F,
-             stratification = "ER",
-             save = F)
-er_table <- er_table$`_data` %>% select(group, row, Q1, Q2, Q3, Q4, `P-value of trend`, `Per SD increase`, `P-value`, het_p)
-
-
-# Menopausal status at blood draw
-meno_bld <- table_output(data_for_assoc = NHS2_all_keto_dat,
-             title = "Keto Diet Score association in NHSII stratified by menopausal status at blood draw",
-             outfile = "Table3_NHS2_KD_Meno_BD.docx", 
-             conditional = F,
-             stratification = "meno_blood_draw",
-             save = F)
-
-meno_bld <- meno_bld$`_data` %>% select(group, row, Q1, Q2, Q3, Q4, `P-value of trend`, `Per SD increase`, `P-value`, het_p)
-
-
-# Menopausal status at diagnosis
-meno_dx <- table_output(data_for_assoc = NHS2_all_keto_dat,
-             title = "Keto Diet Score association in NHSII stratified by menopausal status at diagnosis",
-             outfile = "Table3_NHS2_KD_Meno_DX.docx", 
-             conditional = F,
-             stratification = "meno_dx",
-             save = F)
-
-meno_dx <- meno_dx$`_data` %>% select(group, row, Q1, Q2, Q3, Q4, `P-value of trend`, `Per SD increase`, `P-value`, het_p)
-
-
-# Invasive vs. Non-invasive
-tumor_inv <- table_output(data_for_assoc = NHS2_all_keto_dat,
-             title = "Keto Diet Score association in NHSII stratified by Invasive vs non-invasive",
-             outfile = "Table3_NHS2_KD_Invas.docx", 
-             conditional = F,
-             stratification = "invasive",
-             save = F)
-
-tumor_inv <- tumor_inv$`_data` %>% select(group, row, Q1, Q2, Q3, Q4, `P-value of trend`, `Per SD increase`, `P-value`, het_p)
-
-rbind(overall_table, er_table, meno_bld, meno_dx, tumor_inv) %>% gt()
-
-```
-# Table 3
-``` {r TABLE_3}
-
-########################################
-##### Run association analyses #########
-########################################
-
-##### NHS2 #####
-
+overall_table_kd <- overall_table_kd$`_data` %>% 
+  mutate(group = paste0("KD Overall Breast Cancer (",sum(NHS2_all_keto_dat$case==1), " cases/",sum(NHS2_all_keto_dat$case==0), " controls)" )) %>% 
+  select(group, Q1, Q2, Q3, Q4, `P-value of trend`) %>% 
+  .[2,]
 
 # NHS2 Low-fat diet score exposure output
-overall_table <- table_output(NHS2_all_lfd_dat,
+overall_table_lfd <- table_output(NHS2_all_lfd_dat,
              "Association between quartiles of Low-fat Diet score and breast cancer incidence, Nurses' Health Study II",
              "Table2_NHS2_LFD.docx", save = F)
 
-overall_table <- overall_table$`_data` %>% 
-  mutate(group = paste0("Overall Breast Cancer (",sum(NHS2_all_lfd_dat$case==1), " cases/",sum(NHS2_all_lfd_dat$case==0), " controls)" )) %>% 
-  mutate(het_p = NA) %>% 
-  dplyr::rename(row = `__GT_ROWNAME_PRIVATE__`) %>% 
-  select(group, row, Q1, Q2, Q3, Q4, `P-value of trend`, `Per SD increase`, `P-value`, het_p)
+overall_table_lfd <- overall_table_lfd$`_data` %>% 
+  mutate(group = paste0("LFD Overall Breast Cancer (",sum(NHS2_all_lfd_dat$case==1), " cases/",sum(NHS2_all_lfd_dat$case==0), " controls)" )) %>% 
+  select(group, Q1, Q2, Q3, Q4, `P-value of trend`) %>% 
+  .[2,]
 
 
-
-# ER status
-er_table <- table_output(data_for_assoc = NHS2_all_lfd_dat,
-             title = "Low-fat Diet Score association in NHSII stratified by ER status",
-             outfile = "Table3_NHS2_LFD_ER.docx", 
-             conditional = F,
-             stratification = "ER",
-             save = F)
-er_table <- er_table$`_data` %>% select(group, row, Q1, Q2, Q3, Q4, `P-value of trend`, `Per SD increase`, `P-value`, het_p)
-
-
-# Menopausal status at blood draw
-meno_bld <- table_output(data_for_assoc = NHS2_all_lfd_dat,
-             title = "Low-fat Diet Score association in NHSII stratified by menopausal status at blood draw",
-             outfile = "Table3_NHS2_LFD_Meno_BD.docx", 
-             conditional = F,
-             stratification = "meno_blood_draw",
-             save = F)
-
-meno_bld <- meno_bld$`_data` %>% select(group, row, Q1, Q2, Q3, Q4, `P-value of trend`, `Per SD increase`, `P-value`, het_p)
-
-
-# Menopausal status at diagnosis
-meno_dx <- table_output(data_for_assoc = NHS2_all_lfd_dat,
-             title = "Low-fat Diet Score association in NHSII stratified by menopausal status at diagnosis",
-             outfile = "Table3_NHS2_LFD_Meno_DX.docx", 
-             conditional = F,
-             stratification = "meno_dx",
-             save = F)
-
-meno_dx <- meno_dx$`_data` %>% select(group, row, Q1, Q2, Q3, Q4, `P-value of trend`, `Per SD increase`, `P-value`, het_p)
-
-
-# Invasive vs. Non-invasive
-tumor_inv <- table_output(data_for_assoc = NHS2_all_lfd_dat,
-             title = "Low-fat Diet Score association in NHSII stratified by Invasive vs non-invasive",
-             outfile = "Table3_NHS2_LFD_Invas.docx", 
-             conditional = F,
-             stratification = "invasive",
-             save = F)
-
-tumor_inv <- tumor_inv$`_data` %>% select(group, row, Q1, Q2, Q3, Q4, `P-value of trend`, `Per SD increase`, `P-value`, het_p)
-
-rbind(overall_table, er_table, meno_bld, meno_dx, tumor_inv) %>% gt()
+rbind(overall_table_kd, overall_table_lfd)
 
 ```
 
 
-# Supplementary Table 3
-```{r SUPPLEMENTARY_TABLE_3}
+# Supplementary Table 4
+```{r SUPPLEMENTARY_TABLE_4} 
+
+NHS2_pheno_data <-read.sas7bdat(nhs2_pheno_file)
+NHS2_meno_er_data <- read.csv(nhs2_meno_er_file)
+
+# Read in metabolomics subject data
+pData <- pData(NHS2_ExprSet_processed)
+
+# Read in phenotype information, align with metabolomics pData
+pData$id6 <- substr(as.character(pData$id), 1, 6)
+pData$id7 <- pData$id
+pData <- subset(pData, select=-c(id))
+phenofinal <- merge(NHS2_pheno_data,pData,by.x='id',by.y='id6')
+
+# Write out a table of missing value frequencies that get imputed
+columns <- c("bmi18", "weightchange", "act", 
+             "ahei_noal", "alco")
+
+na_table <- phenofinal %>%
+  summarise(across(
+    all_of(columns),
+    list(
+      NA_Count = ~ sum(is.na(.)),
+      NA_Pct   = ~ sum(is.na(.))*100 / n()
+    ),
+    .names = "{.col}__{.fn}"   # double-underscore as separator
+  )) %>%
+  pivot_longer(
+    cols = everything(),
+    names_to = c("Variable", ".value"),
+    names_sep = "__"
+  ) %>%
+  arrange(desc(NA_Pct))
+na_table
+  
+```
+
+# Supplementary Table 5
+```{r SUPPLEMENTARY_TABLE_5}
 ##### NHS2 LFD #####
 
 NHS2_all_lfd_data <- NHS2_all_lfd_dat %>% 
@@ -374,7 +309,158 @@ NHS2_all_lfd_data %>% filter(`Case/Control`== "Control") %>%
 
 ```
 
+# Supplementary Table 6
+```{r SUPPLEMENTARY_TABLE_6}
+# ER status
+er_table <- table_output(data_for_assoc = NHS2_all_keto_dat,
+             title = "Keto Diet Score association in NHSII stratified by ER status",
+             outfile = "Table3_NHS2_KD_ER.docx", 
+             conditional = F,
+             stratification = "ER",
+             save = F)
+er_table <- er_table$`_data` %>% 
+  select(group, row, Q1, Q2, Q3, Q4, `P-value of trend`, `Per SD increase`, `P-value`, het_p)%>% 
+  filter(row == "Model 2")
 
+
+# Menopausal status at blood draw
+meno_bld <- table_output(data_for_assoc = NHS2_all_keto_dat,
+             title = "Keto Diet Score association in NHSII stratified by menopausal status at blood draw",
+             outfile = "Table3_NHS2_KD_Meno_BD.docx", 
+             conditional = F,
+             stratification = "meno_blood_draw",
+             save = F)
+
+meno_bld <- meno_bld$`_data` %>% 
+  select(group, row, Q1, Q2, Q3, Q4, `P-value of trend`, `Per SD increase`, `P-value`,het_p) %>% 
+  filter(row == "Model 2")
+
+
+# Menopausal status at diagnosis
+meno_dx <- table_output(data_for_assoc = NHS2_all_keto_dat,
+             title = "Keto Diet Score association in NHSII stratified by menopausal status at diagnosis",
+             outfile = "Table3_NHS2_KD_Meno_DX.docx", 
+             conditional = F,
+             stratification = "meno_dx",
+             save = F)
+
+meno_dx <- meno_dx$`_data` %>% 
+  select(group, row, Q1, Q2, Q3, Q4, `P-value of trend`, `Per SD increase`, `P-value`,het_p) %>% 
+  filter(row == "Model 2")
+
+
+# Invasive vs. Non-invasive
+tumor_inv <- table_output(data_for_assoc = NHS2_all_keto_dat,
+             title = "Keto Diet Score association in NHSII stratified by Invasive vs non-invasive",
+             outfile = "Table3_NHS2_KD_Invas.docx", 
+             conditional = F,
+             stratification = "invasive",
+             save = F)
+
+tumor_inv <- tumor_inv$`_data` %>% 
+  select(group, row, Q1, Q2, Q3, Q4, `P-value of trend`, `Per SD increase`, `P-value`,het_p) %>% 
+  filter(row == "Model 2")
+
+subgroup_tab <- rbind(er_table, meno_bld, meno_dx, tumor_inv) 
+
+subgroup_tab$`FDR q-value` <- p.adjust(subgroup_tab$`P-value of trend`, method='BH') %>% 
+  round(2)
+
+gt(subgroup_tab %>% select(group, row, Q1, Q2, Q3, Q4, `P-value of trend`, `FDR q-value` , `Per SD increase`, `P-value`,het_p))
+```
+# Supplementary Table 7
+```{r SUPPLEMENTARY_TABLE_7}
+
+
+# ER status
+er_table <- table_output(data_for_assoc = NHS2_all_lfd_dat,
+             title = "Low-fat Diet Score association in NHSII stratified by ER status",
+             outfile = "Table3_NHS2_LFD_ER.docx", 
+             conditional = F,
+             stratification = "ER",
+             save = F)
+er_table <- er_table$`_data` %>% 
+  select(group, row, Q1, Q2, Q3, Q4, `P-value of trend`,  `Per SD increase`, `P-value`,het_p)%>% 
+  filter(row == "Model 2")
+
+# Menopausal status at blood draw
+meno_bld <- table_output(data_for_assoc = NHS2_all_lfd_dat,
+             title = "Low-fat Diet Score association in NHSII stratified by menopausal status at blood draw",
+             outfile = "Table3_NHS2_LFD_Meno_BD.docx", 
+             conditional = F,
+             stratification = "meno_blood_draw",
+             save = F)
+
+meno_bld <- meno_bld$`_data` %>% 
+  select(group, row, Q1, Q2, Q3, Q4, `P-value of trend`, `Per SD increase`, `P-value`,het_p) %>% 
+  filter(row == "Model 2")
+
+# Menopausal status at diagnosis
+meno_dx <- table_output(data_for_assoc = NHS2_all_lfd_dat,
+             title = "Low-fat Diet Score association in NHSII stratified by menopausal status at diagnosis",
+             outfile = "Table3_NHS2_LFD_Meno_DX.docx", 
+             conditional = F,
+             stratification = "meno_dx",
+             save = F)
+
+meno_dx <- meno_dx$`_data` %>% 
+  select(group, row, Q1, Q2, Q3, Q4, `P-value of trend`, `Per SD increase`, `P-value`,het_p) %>% 
+  filter(row == "Model 2")
+
+# Invasive vs. Non-invasive
+tumor_inv <- table_output(data_for_assoc = NHS2_all_lfd_dat,
+             title = "Low-fat Diet Score association in NHSII stratified by Invasive vs non-invasive",
+             outfile = "Table3_NHS2_LFD_Invas.docx", 
+             conditional = F,
+             stratification = "invasive",
+             save = F)
+
+tumor_inv <- tumor_inv$`_data` %>% 
+  select(group, row, Q1, Q2, Q3, Q4, `P-value of trend`, `Per SD increase`, `P-value`,het_p) %>% 
+  filter(row == "Model 2")
+
+subgroup_tab <- rbind(er_table, meno_bld, meno_dx, tumor_inv) 
+
+subgroup_tab$`FDR q-value` <- p.adjust(subgroup_tab$`P-value of trend`, method='BH') %>% 
+  round(2)
+
+gt(subgroup_tab %>% select(group, row, Q1, Q2, Q3, Q4, `P-value of trend`, `FDR q-value` , `Per SD increase`, `P-value`,het_p))
+
+```
+
+# Supplementary Table 8
+```{r SUPPLEMENTARY_TABLE_8} 
+
+##### Covariate Robustness analysis #####
+
+
+# NHS2 Keto diet score exposure output
+kd_overall_table <- table_output(NHS2_all_keto_dat,
+             "Association between quartiles of Ketogenic Diet score and breast cancer incidence, Nurses' Health Study II",
+             "Table2_NHS2_KD.docx", save = F)
+
+kd_overall_table <- kd_overall_table$`_data` %>% 
+  mutate(group = "Ketogenic Diet" ) %>% 
+  dplyr::rename(row = `__GT_ROWNAME_PRIVATE__`) %>% 
+  select(group, row, Q1, Q2, Q3, Q4, `P-value of trend`, `Per SD increase`, `P-value`)
+kd_overall_table$`FDR q-value` <- p.adjust(kd_overall_table$`P-value of trend`, method='BH') %>% 
+  round(2)
+
+
+# NHS2 Low-fat diet score exposure output
+lfd_overall_table <- table_output(NHS2_all_lfd_dat,
+             "Association between quartiles of Low-fat Diet score and breast cancer incidence, Nurses' Health Study II",
+             "Table2_NHS2_LFD.docx", save = F)
+
+lfd_overall_table <- lfd_overall_table$`_data` %>% 
+  mutate(group = "Low-fat Diet" ) %>% 
+  dplyr::rename(row = `__GT_ROWNAME_PRIVATE__`) %>% 
+  select(group, row, Q1, Q2, Q3, Q4, `P-value of trend`, `Per SD increase`, `P-value`)
+lfd_overall_table$`FDR q-value` <- p.adjust(lfd_overall_table$`P-value of trend`, method='BH') %>% 
+  round(2)
+gt(rbind(kd_overall_table, lfd_overall_table) %>% select(group, row, Q1, Q2, Q3, Q4, `P-value of trend`, `FDR q-value` , `Per SD increase`, `P-value`))
+
+```
 
 # Fasting Case/control 
 ``` {r Fasting_case_control}
@@ -383,21 +469,35 @@ print(paste("Number of Fasting Controls = ", sum(NHS2_all_keto_dat %>% filter(fa
 
 ```
 
-# Supplementary Table 4
-``` {r SUPPLEMENTARY_TABLE_4}
+# Supplementary Table 9
+``` {r SUPPLEMENTARY_TABLE_9}
+
+
+
+##### Fasting #####
+
+
 # NHS2 Keto diet score exposure output
+fasted_table_kd <- table_output(NHS2_all_keto_dat %>% filter(fast != "nonfasting"),
+             "Association between quartiles of Ketogenic Diet score and breast cancer incidence, Nurses' Health Study II",
+             "Fasting_NHS2_KD.docx", save = F)
+
+fasted_table_kd <- fasted_table_kd$`_data` %>% 
+  mutate(group = paste0("Ketogenic Diet (",sum(NHS2_all_keto_dat %>% filter(fast != "nonfasting") %>% .$case == 1), " cases/",sum(NHS2_all_keto_dat %>% filter(fast != "nonfasting") %>% .$case == 0), " controls)" )) %>% 
+  select(group, Q1, Q2, Q3, Q4, `P-value of trend`, `Per SD increase`, `P-value`) %>% 
+  .[2,]
+
+# NHS2 Low-fat diet score exposure output
+fasted_table_lfd <- table_output(NHS2_all_lfd_dat %>% filter(fast != "nonfasting"),
+             "Association between quartiles of Low-fat Diet score and breast cancer incidence, Nurses' Health Study II",
+             "Fasting_NHS2_LFD.docx", save = F)
+
+fasted_table_lfd <- fasted_table_lfd$`_data` %>% 
+  mutate(group = paste0("Low-fat Diet (",sum(NHS2_all_keto_dat %>% filter(fast != "nonfasting") %>% .$case == 1), " cases/",sum(NHS2_all_keto_dat %>% filter(fast != "nonfasting") %>% .$case == 0), " controls)" )) %>% 
+  select(group, Q1, Q2, Q3, Q4, `P-value of trend`, `Per SD increase`, `P-value`) %>% 
+  .[2,]
 
 
-table_output(NHS2_all_keto_dat %>% filter(fast != "nonfasting"),
-             "Association between quartiles of Ketogenic Diet score and breast cancer incidence, Nurses' Health Study II (fasted samples only)",
-             "Table2_NHS2_KD_fasting.html", save =F)
+gt(rbind(fasted_table_kd, fasted_table_lfd))
 
 ```
-# Supplementary Table 5
-``` {r SUPPLEMENTARY_TABLE_5}
-# NHS2 LFD score exposure output
-table_output(NHS2_all_lfd_dat %>% filter(fast != "nonfasting"),
-             "Association between quartiles of Low-fat Diet score and breast cancer incidence, Nurses' Health Study II (fasted samples only)",
-              "Table2_NHS2_LFD_fasting.html", save = F)
-```
-

@@ -3,13 +3,6 @@
 setwd("~/keto-metabolomics/SchweickartAnnalise_HypocaloricDiets_022025")
 library(dplyr)
 library(maplet)
-library(reshape)
-library(readxl)
-library(sva)
-library(stringr)
-library(ggplot2)
-
-
 manuscript_folder <- "/udd/nhast/keto-metabolomics/SchweickartAnnalise_HypocaloricDiets_022025"
 
 
@@ -32,11 +25,16 @@ Broad_Annotations_file <- paste0(manuscript_folder, "/Input_Data/Broad_Metabolom
 HP_align_file <- paste0(manuscript_folder, "/Input_Data/HP_align.csv")
 CP_align_file <- paste0(manuscript_folder, "/Input_Data/CP_align.csv")
 
+# Standardized lipid names mapping file
+LM_standardized_names_file <-  
+  paste0(manuscript_folder, "/Input_Data/LIPIDMAPS_standardised_names.csv")
 
 # Write out processed datasets
 
 known_mets_control_file <- 
   paste0(manuscript_folder, "/Processed_Data_and_Results/processed_control_known_metabolites.xlsx")
+  paste0(manuscript_folder, 
+         "/Processed_Data_and_Results/processed_control_known_metabolites.xlsx")
 
 
 KD_knowns_corrected_data <- 
@@ -542,6 +540,7 @@ only_known_controls <-  function(){
                                         data.frame(rowData(c8_pos)),
                                         data.frame(rowData(hilic_neg)),
                                         data.frame(rowData(c18_neg))))
+                distinct(), by = "Metabolite")
   
   combined_SE<-SummarizedExperiment(assays=combined_assay, 
                                     colData= colData(hilic_pos), 

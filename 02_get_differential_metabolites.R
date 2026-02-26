@@ -1,13 +1,6 @@
-library(glmnet)
-library(caret)
-library(nlme)
-library(parallel)
-library(ggplot2)
-library(ggpubr)
-library(openxlsx)
+
 
 ##### Data input and output file names #####
-manuscript_folder <- "/udd/nhast/keto-metabolomics/SchweickartAnnalise_HypocaloricDiets_022025"
 
 source(paste0(manuscript_folder, "/Scripts/internal_functions.R"))
 

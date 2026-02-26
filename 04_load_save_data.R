@@ -1,18 +1,6 @@
 
 # Functions for loading data and running association analysis
-library(sas7bdat)
-library(tidyverse)
-library(readxl)
-library(survival) 
-library(mgcv)
-library(openxlsx)
-library(data.table)
-library(Biobase)
-library(dplyr)
-library(glue)
-library(gt)
 
-manuscript_folder <- "/udd/nhast/keto-metabolomics/SchweickartAnnalise_HypocaloricDiets_022025"
 
 # inputs
 betas_file <- 

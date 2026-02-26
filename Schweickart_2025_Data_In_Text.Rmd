@@ -1,0 +1,241 @@
+---
+title: "Schweickart_2025_Technical_Review"
+output: html_document
+date: "2025-02-20"
+---
+
+```{r script/data loading, echo=F}
+library(dplyr)
+library(gt)
+library(gtsummary)
+library(chanmetab)
+library(maplet)
+manuscript_folder <- "/udd/nhast/keto-metabolomics/SchweickartAnnalise_HypocaloricDiets_022025"
+
+source(paste0(manuscript_folder, "/Scripts/internal_functions.R"))
+
+########################
+##### DATA PATHS #####
+########################
+OSU_metadata_file <- paste0(manuscript_folder, "/Input_Data/Metagenics Data Update for Dr. Volek.xlsx")
+
+betas_file <- paste0(manuscript_folder, "/Processed_Data_and_Results/filtered_betas.xlsx")
+
+KD_knowns_file <- 
+  paste0(manuscript_folder, "/Processed_Data_and_Results/KD_known_metabolites_processed_batch_corrected.xlsx")
+LFD_knowns_file <- 
+  paste0(manuscript_folder, "/Processed_Data_and_Results/LFD_known_metabolites_processed.xlsx")
+
+##### Load Data #####
+
+OSU_metadata <- read_excel(OSU_metadata_file) %>% .[1:37,]
+
+sig_diff_mets <- read.xlsx(paste0(manuscript_folder, "/Processed_Data_and_Results/known_mets_association_results.xlsx"))
+
+NHS2_MWAS_withBMI <- 
+  read_csv(paste0(manuscript_folder, "/Processed_Data_and_Results/NHS2.MWAS.withBMI.csv"))
+
+nhs2_meno_er_file <- # Contains ER and menopausal status of cancer in NHS2
+  "/udd/n2bch/request/Metab_2017/NHSII/data_mtbl_nhs2_18DEC18.csv"
+
+NHS2_meno_er_data <- read_csv(nhs2_meno_er_file)
+
+
+load(paste0(manuscript_folder, "/Processed_Data_and_Results/NHS_metadata_scores_df_maplet.Rdata"))
+load(paste0(manuscript_folder, "/Processed_Data_and_Results/NHS2_ExprSet_processed_maplet.RData"))
+load(paste0(manuscript_folder, "/Processed_Data_and_Results/Concordance_information.RData"))
+
+KD_SE <- mt_load_se_xls(file = KD_knowns_file)
+
+LFD_SE <- mt_load_se_xls(file = LFD_knowns_file)
+
+rownames(KD_SE) <- rowData(KD_SE)$HMDB_ID
+
+rownames(LFD_SE) <- rowData(LFD_SE)$HMDB_ID
+
+NHS2_LFD_betas <- read.xlsx(betas_file, sheet = "NHS2_betas_all_lfd")
+NHS2_KD_betas <- read.xlsx(betas_file, sheet = "NHS2_betas_all_keto")
+
+all.raw.NHS2 = merge_metab_data(
+  merge_type = "union", combine_cohorts = T, collection_to_use = "first",
+  cohorts = c("nhs2"), endpoints = c("breast"), keep_failed_pm_metabolites = F,
+  impute_cutoff = 0, archive_date = "2024-10-09", 
+  transformation = "transform_none")
+```
+
+# Time between blood draw and breast cancer diagnosis
+```{r draw_to_dx}
+NHS2_meno_er_data %>% dplyr::select(dxmonth, bldmonth) %>% na.omit() %>% mutate(diff = dxmonth -bldmonth) %>% .$diff %>% summary()
+```
+
+
+# OSU Stats
+```{r OSU_stats }
+
+OSU_metadata %<>% mutate(weight_loss = 100*(WEIGHT6-WEIGHT0)/WEIGHT0) 
+
+print(paste("OSU KD Weightloss mean (sd): ", round(mean(OSU_metadata%>% filter(GROUP != "LF") %>% .$weight_loss ), 4), " (", round(sd(OSU_metadata%>% filter(GROUP != "LF") %>% .$weight_loss ),4), ")"))
+
+print(paste("OSU LFD Weightloss mean (sd): ", round(mean(OSU_metadata%>% filter(GROUP == "LF") %>% .$weight_loss ), 4), " (", round(sd(OSU_metadata%>% filter(GROUP == "LF") %>% .$weight_loss ),4), ")"))
+
+```
+
+# Final Dimensions
+```{r Final_Dimensions}
+
+# Total number of metabolites analyzed
+print(paste("Final metabolites of controlled trials: ", nrow(KD_SE)))
+
+# Total number of subjects analyzed
+print(paste("Final number of subjects in controlled trials: ", length(unique(colData(KD_SE)$Subject)) + length(unique(colData(LFD_SE)$Subject))))
+
+```
+
+# NHS N
+``` {r NHS_N }
+  
+print(paste("NHS_N = ", dim(pData(all.raw.NHS2$expr_set$all_cohorts))[[1]]))
+```
+
+# NHS N filtered
+``` {r NHS_N_filtered }
+# NHS_N_filtered
+print(paste("NHS_N_filtered = ", dim(NHS2_all_keto_dat)[[1]]))
+```
+
+# Metaboblites Measured
+``` {r METABOLITES_MEASURED }
+metabolites_tested_nhs2 = intersect(rownames(fData(all.raw.NHS2$expr_set$all_cohorts)), sig_diff_mets$HMDB_ID) %>% length()
+print(paste("Metabolites Measured = ", metabolites_tested_nhs2))
+```
+
+# Significant Metabolites
+``` {r SIG_METABOLITES }
+NHS2_knowns <- rownames(fData(all.raw.NHS2$expr_set$all_cohorts))
+
+NHS2_betas_all_keto <- sig_diff_mets %>% 
+  filter(KD_change_p_adj < 0.05) %>% 
+  select(HMDB_ID, estimate.x) %>% 
+  dplyr::rename(beta = estimate.x) %>% 
+  filter(HMDB_ID %in% NHS2_knowns)
+
+
+NHS2_betas_all_lfd <- sig_diff_mets %>% 
+  filter(LFD_change_p_adj < 0.05) %>% 
+  select(HMDB_ID, estimate.y) %>% 
+  dplyr::rename(beta = estimate.y) %>% 
+  filter(HMDB_ID %in% NHS2_knowns)
+
+print(paste("Significant Metabolites KD = ", dim(NHS2_betas_all_keto)[1]))
+print(paste("Significant Metabolites LFD = ", dim(NHS2_betas_all_lfd)[1]))
+
+```
+
+# AUC
+``` {r AUC}
+# Check that the filtered betas in NHS and NHSII are still able to perfectly separate pre- vs. post- dietary intervention metabolomics profiles
+
+# KD AUC
+kd_dat_nhs2 = assay(KD_SE)[NHS2_KD_betas$HMDB_ID,]
+
+kd_scores_nhs2 <- t(kd_dat_nhs2) %*% NHS2_KD_betas$beta %>% data.frame() %>% 
+  dplyr::rename(Score = ".")
+
+kd_scores_nhs2$Week = colData(KD_SE)$Week
+kd_scores_nhs2 %<>% mutate(labels = ifelse(Week==0,0,1))
+
+
+print(paste("AUC of KD controlled trials = ", pROC::auc(pROC::roc(kd_scores_nhs2$labels, kd_scores_nhs2$Score))))
+
+### LFD ####
+
+lfd_dat_nhs2 = assay(LFD_SE)[NHS2_LFD_betas$HMDB_ID,]
+
+lfd_scores_nhs2 <- t(lfd_dat_nhs2) %*% NHS2_LFD_betas$beta %>% data.frame() %>% 
+  dplyr::rename(Score = ".")
+
+lfd_scores_nhs2$Week = colData(LFD_SE)$Week
+lfd_scores_nhs2 %<>% mutate(labels = ifelse(Week==0,0,1))
+
+print(paste("AUC of LFD controlled trials = ", pROC::auc(pROC::roc(lfd_scores_nhs2$labels, lfd_scores_nhs2$Score))))
+
+
+
+```
+
+
+# NHS case/control
+```{r CASE/CONTROL }
+print(paste("Number of Cases = ", sum(NHS2_all_keto_dat$case == 1)))
+print(paste("Number of Controls = ", sum(NHS2_all_keto_dat$case == 0)))
+
+```
+
+
+# NHS Summary statistics
+```{r NHS_SUM_STATS }
+
+print(paste("Average participant age = ",mean(NHS2_all_keto_dat$ageyr)))
+print(paste("Standard Deviation participant age = ",sd(NHS2_all_keto_dat$ageyr)))
+print(paste("Percent Fasting = ", 100*(sum(NHS2_all_keto_dat$fast != "nonfasting")/nrow(NHS2_all_keto_dat))))
+print(paste("Percent Pre-menopausal at blood draw = ", 100*(sum(NHS2_all_keto_dat$menopmh == "pre")/nrow(NHS2_all_keto_dat))))
+print(paste("Percent Pre-menopausal at diagnosis= ", 100*(sum(NHS2_all_keto_dat$menopmh_at_dx == 1)/nrow(NHS2_all_keto_dat))))
+
+
+```
+
+
+# Concordance Correlation
+```{r Concordance_Correlation }
+print(paste("KD metabolite concordance correlation with fold-change = ", round(cor.test(kd_merged$Metabolite_FC, kd_merged$NHSII_concordance)$estimate,4)))
+
+print(paste("KD metabolite concordance correlation with fold-change Confidence Interval = ", round(cor.test(kd_merged$Metabolite_FC, kd_merged$NHSII_concordance)$conf.int[1],4), " - ",
+round(cor.test(kd_merged$Metabolite_FC, kd_merged$NHSII_concordance)$conf.int[2],4)))
+
+print(paste("LFD metabolite concordance correlation with fold-change = ", 
+            round(cor.test(lfd_merged$Metabolite_FC, lfd_merged$NHSII_concordance)$estimate,4)))
+
+print(paste("LFD metabolite concordance correlation with fold-change Confidence Interval = ", 
+round(cor.test(lfd_merged$Metabolite_FC, lfd_merged$NHSII_concordance)$conf.int[1],4), " - ",
+round(cor.test(lfd_merged$Metabolite_FC, lfd_merged$NHSII_concordance)$conf.int[2],4)))
+
+
+```
+
+# MWAS Correlation with Fold-change
+```{r MWAS_Correlation_FC }
+mwas_kd_merged <- merge(NHS2_MWAS_withBMI, kd_merged, by.x = "hmdb.id", by.y ="HMDB_ID") 
+print(paste("KD MWAS correlation with fold-change = ", round(cor.test(mwas_kd_merged$Metabolite_FC, mwas_kd_merged$coef)$estimate,4)))
+
+print(paste("KD MWAS correlation with fold-change Confidence Interval = ", round(cor.test(mwas_kd_merged$Metabolite_FC, mwas_kd_merged$coef)$conf.int[1],4), " - ",
+round(cor.test(mwas_kd_merged$Metabolite_FC, mwas_kd_merged$coef)$conf.int[2],4)))
+
+mwas_lfd_merged <- merge(NHS2_MWAS_withBMI, lfd_merged, by.x = "hmdb.id", by.y ="HMDB_ID") 
+print(paste("LFD MWAS correlation with fold-change = ", round(cor.test(mwas_lfd_merged$Metabolite_FC, mwas_lfd_merged$coef)$estimate,4)))
+
+print(paste("LFD MWAS correlation with fold-change Confidence Interval = ", round(cor.test(mwas_lfd_merged$Metabolite_FC, mwas_lfd_merged$coef)$conf.int[1],4), " - ",
+round(cor.test(mwas_lfd_merged$Metabolite_FC, mwas_lfd_merged$coef)$conf.int[2],4)))
+
+
+```
+
+# MWAS Correlation with Concordance
+```{r MWAS_Correlation_Concordance }
+mwas_kd_merged <- merge(NHS2_MWAS_withBMI, kd_merged, by.x = "hmdb.id", by.y ="HMDB_ID") 
+print(paste("KD MWAS correlation with fold-change = ", round(cor.test(mwas_kd_merged$NHSII_concordance, mwas_kd_merged$coef)$estimate,4)))
+
+print(paste("KD MWAS correlation with fold-change Confidence Interval = ", round(cor.test(mwas_kd_merged$NHSII_concordance, mwas_kd_merged$coef)$conf.int[1],4), " - ",
+round(cor.test(mwas_kd_merged$NHSII_concordance, mwas_kd_merged$coef)$conf.int[2],4)))
+
+mwas_lfd_merged <- merge(NHS2_MWAS_withBMI, lfd_merged, by.x = "hmdb.id", by.y ="HMDB_ID") 
+print(paste("LFD MWAS correlation with concordance = ", round(cor.test(mwas_lfd_merged$NHSII_concordance, mwas_lfd_merged$coef)$estimate,4)))
+
+print(paste("LFD MWAS correlation with concordance Confidence Interval = ", round(cor.test(mwas_lfd_merged$NHSII_concordance, mwas_lfd_merged$coef)$conf.int[1],4), " - ",
+round(cor.test(mwas_lfd_merged$NHSII_concordance, mwas_lfd_merged$coef)$conf.int[2],4)))
+
+
+```
+
+
+
+

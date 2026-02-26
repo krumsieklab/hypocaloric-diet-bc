@@ -1,16 +1,7 @@
 ## Load in NHS data from both nhs1 and nhs2 cohorts
 ## Impute half min, probit transform, remove samples and features
 ## With too much missing data
-library(dplyr)
-library(chanmetab)
-library(Biobase)
-library(readxl)
-library(openxlsx)
-library(maplet)
-library(sva)
 
-manuscript_folder <- 
-  "/udd/nhast/keto-metabolomics/SchweickartAnnalise_HypocaloricDiets_022025"
 
 
 # Input file names

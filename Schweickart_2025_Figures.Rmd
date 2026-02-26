@@ -5,18 +5,11 @@ date: "2025-02-18"
 ---
 
 ```{r script/data loading, include=F}
-library(dplyr)
-library(maplet)
-library(viridis)
-library(ggrepel)
-library(cowplot)
-library(grid)
-library(openxlsx)
-library(readr)
-library(reshape2)
 
-setwd("~/Downloads/NHS_for_jan")
-#source("internal_functions.R")
+
+manuscript_folder <- "/udd/nhast/keto-metabolomics/SchweickartAnnalise_HypocaloricDiets_022025"
+
+source(paste0(manuscript_folder, "/Scripts/internal_functions.R"))
 
 
 ########################
@@ -24,19 +17,25 @@ setwd("~/Downloads/NHS_for_jan")
 ########################
 
 # Input file names
-betas_file <- "filtered_betas.xlsx"
+betas_file <- 
+  paste0(manuscript_folder,"/Processed_Data_and_Results/filtered_betas.xlsx")
 
-mets_res_file <- "known_mets_association_results.xlsx"
+mets_res_file <- 
+  paste0(manuscript_folder,"/Processed_Data_and_Results/known_mets_association_results.xlsx")
 
-KD_knowns_file <- "KD_known_metabolites_processed_batch_corrected.xlsx"
+KD_knowns_file <- 
+  paste0(manuscript_folder,"/Processed_Data_and_Results/KD_known_metabolites_processed_batch_corrected.xlsx")
 
-LFD_knowns_file <- "LFD_known_metabolites_processed.xlsx"
+LFD_knowns_file <- 
+  paste0(manuscript_folder,"/Processed_Data_and_Results/LFD_known_metabolites_processed.xlsx")
 
-MWAS_file <- "NHS2.MWAS.withBMI.csv"
+MWAS_file <- 
+  paste0(manuscript_folder,"/Processed_Data_and_Results/NHS2.MWAS.withBMI.csv")
 
 # Load in data
-
-load("Concordance_information.RData")
+# load(paste0(manuscript_folder,"/Processed_Data_and_Results/NHS_metadata_scores_df_maplet.Rdata"))
+# load(paste0(manuscript_folder,"/Processed_Data_and_Results/NHS2_ExprSet_processed_maplet.RData"))
+load(paste0(manuscript_folder,"/Processed_Data_and_Results/Concordance_information.RData"))
 
 mets_res <- read.xlsx(mets_res_file)
 
@@ -72,22 +71,22 @@ NHS2_mets_res_all <- rbind(NHS2_mets_res_kd,
                            NHS2_mets_res_lfd) %>% 
   distinct()
 ```
-# Figure 1a
+# Figure 2a
 ``` {r fig.width=10,fig.height=15}
 
 
 
 #########################################
-#### Figure 1 a and c Forest plots ######
+#### Figure 2 a and c Forest plots ######
 ########################################
 
 forest_plot <- function(change_df){
-  ggplot(change_df, aes(x=LFD_mean, y=metabolite_name))+
+  ggplot(change_df, aes(x=LFD_mean, y=Standardized.name))+
   geom_vline(xintercept=0, color="black")+
   geom_linerange(aes(xmin=LFD_lower, xmax=LFD_upper), linewidth = 2, color = magma(10)[5])+
-  geom_point( aes(x= LFD_mean, y=metabolite_name),shape=21, size=5, fill = magma(10)[5], color="black") +
+  geom_point( aes(x= LFD_mean, y=Standardized.name),shape=21, size=5, fill = magma(10)[5], color="black") +
   geom_linerange(aes(xmin=KD_lower, xmax=KD_upper),linewidth=2,color = magma(10)[9])+
-  geom_point(aes(x=KD_mean, y = metabolite_name), shape=21, size=5, fill = magma(10)[9], color="black") +
+  geom_point(aes(x=KD_mean, y = Standardized.name), shape=21, size=5, fill = magma(10)[9], color="black") +
   facet_grid(as.formula(sprintf("Molecular.Annotation~.")), scales = "free_y", space = "free_y") +
   xlab("Fold Change with 95% confidence interval") +
   ylab("Metabolite")+
@@ -106,7 +105,7 @@ forest_plot <- function(change_df){
 NHS2_mets_res_all$metabolite_name[NHS2_mets_res_all$metabolite_name=="N-alpha-acetyarginine"] <-"N-alpha-acetylarginine"
 NHS2_mets_res_all$Molecular.Annotation[NHS2_mets_res_all$metabolite_name=="histidine"] <-"Amino Acid"
 
-NHS2_mets_res_all$metabolite_name[NHS2_mets_res_all$metabolite_name=="alpha-hydroxybutyrate/beta-hydroxybutyrate/hydroxyisobutyrate"] <-"2,3-hydroxybutyrate"
+NHS2_mets_res_all$Standardized.name[NHS2_mets_res_all$Standardized.name=="alpha-hydroxybutyrate/beta-hydroxybutyrate/hydroxyisobutyrate"] <-"2,3-hydroxybutyrate"
 NHS2_mets_res_all$Molecular.Annotation[NHS2_mets_res_all$Molecular.Annotation == "Plasmologen"]<-"Plasmalogen"
 overlap_pathways <- c("Acylcarnitine", "Cholesterol Ester", "Phosphatidylcholine","Plasmalogen", "Sphingomyelin", "Ketone Body")
 #Overlapping changes
@@ -115,12 +114,12 @@ forest_plot(NHS2_mets_res_all %>%
               filter(KD_change_p_adj < 0.05 &LFD_change_p_adj < 0.05) %>% 
               filter(!(metabolite_name %in% c("C40:10 PC", "C36:2 PE plasmalogen"))))
 ```
-# Figure 1c 
+# Figure 2c 
 ```{r fig.width=10,fig.height=4}
-NHS2_mets_res_all %<>% mutate(Molecular.Annotation = ifelse(grepl("acetyl",metabolite_name), "N-acetyl Amino Acids", Molecular.Annotation))
+NHS2_mets_res_all %<>% mutate(Molecular.Annotation = ifelse(grepl("acetyl",metabolite_name), "N-acetyl Metabolites", Molecular.Annotation))
 
 forest_plot(NHS2_mets_res_all %>% 
-              filter(Molecular.Annotation %in% c("Amino Acid","N-acetyl Amino Acids")) %>% 
+              filter(Molecular.Annotation %in% c("Amino Acid","N-acetyl Metabolites")) %>% 
               filter(KD_change_p_adj < 0.05  ||
                        LFD_change_p_adj < 0.05))
 
@@ -144,21 +143,18 @@ trigs_plot_df_lfd <- NHS2_mets_res_all %>%
 trigs_plot_df <- rbind(trigs_plot_df_KD, trigs_plot_df_lfd)
 trigs_plot_df$diet <- c(rep("KD", times = nrow(trigs_plot_df_KD)),
                         rep("LFD", times = nrow(trigs_plot_df_lfd)))
-trigs_plot_df %<>% mutate(shape = case_when(p_adj > 0.05 ~ "insignificant",
-                                 estimate < 0 ~ "abundance down",
-                                 estimate > 0 ~ "abundance up"))
 
 # New facet label names for supp variable
 supp.labs <- c("Ketogenic Diet", "Low-fat Diet")
 names(supp.labs) <- c("KD", "LFD")
 
-ggplot(trigs_plot_df, aes(x=length, y = saturation, fill = estimate, size = -log10(p_adj), color = estimate, shape = shape))+
+ggplot(trigs_plot_df, aes(x=length, y = saturation, fill = estimate, size = -log10(p_adj), color = estimate, shape = estimate < 0))+
   geom_point()+
   theme_minimal() + 
   labs( color="Fold Change", shape = "Direction of change")+
   scale_fill_viridis(option = "plasma")+
   scale_color_viridis(option = "plasma",breaks = c(-1.5, 0, 1.5))+
-  scale_shape_manual(values=c(24,25,21), name= "Direction of change",labels = c("Increased Abundance", "Decreased Abundance", "Insignificant"))+
+  scale_shape_manual(values=c(24,25), name= "Direction of change",labels = c("Increased Abundance", "Decreased Abundance"))+
   scale_size_continuous(range = c(0, 15), name="-log10(Adjusted p)")+
   ggtitle("Triglyceride changes on the Calorically Restricted Diets") + 
   xlab("Chain Length") + 
@@ -194,13 +190,13 @@ fig_2a_plot_df <- kd_merged %>%
   mutate(fc_scaled = Metabolite_FC/top_fc_kd)
 
 
-fig_2a_plot_df$Metabolite.x[fig_2a_plot_df$Metabolite.x=="alpha-hydroxybutyrate/beta-hydroxybutyrate/hydroxyisobutyrate"] <-"2,3-hydroxybutyrate"
-fig_2a_plot_df$Metabolite.x[fig_2a_plot_df$Metabolite.x=="CAR(4:0(OH))"] <-"C4-OH carnitine"
+fig_2a_plot_df$Standardized.name[fig_2a_plot_df$Metabolite.x=="alpha-hydroxybutyrate/beta-hydroxybutyrate/hydroxyisobutyrate"] <-"2,3-hydroxybutyrate"
+
 fig_2a_plot_df$Metabolite.x[fig_2a_plot_df$Metabolite.x=="PC(P-36:4)/PC(O-36:5)_B"] <-"PC(P-36:4)/PC(O-36:5)"
 
-kd_mets_to_label <- c("DG(36:2)","TG(54:2)", "DG(38:5)", "Acetaminophen", "CE(18:3)", "CE(20:3)", "N-Oleoyl glycine",  "2,3-hydroxybutyrate", "C4-OH carnitine")
+kd_mets_to_label <- c("DG 36:2","TG 54:2", "DG 38:5", "Acetaminophen", "CE 18:3", "CE 20:3", "NA-Gly 18:1(9Z)",  "2,3-hydroxybutyrate", "CAR 4:0;OH")
 
-fig_2a_plot_df %<>% mutate(label = ifelse(Metabolite.x %in% kd_mets_to_label, Metabolite.x, "")) 
+fig_2a_plot_df %<>% mutate(label = ifelse(Standardized.name %in% kd_mets_to_label, Standardized.name, "")) 
 
 
 ggplot(fig_2a_plot_df, aes(x = Metabolite_FC, 
@@ -237,9 +233,9 @@ fig_2b_plot_df <- lfd_merged %>%
   merge(NHS2_mets_res_lfd, by ="HMDB_ID") %>% 
   mutate(fc_scaled = Metabolite_FC/top_fc_lfd)
 
-lfd_mets_to_label <- c( "PE(40:6)","PE(38:6)", "Acetaminophen", "N-Oleoyl glycine",   "N1-Acetylspermidine","CE(18:3)","CE(18:0)")
+lfd_mets_to_label <- c( "PE 40:6","PE 38:6", "Acetaminophen", "NA-Gly 18:1(9Z)",   "N1-Acetylspermidine","CE 18:3","CE 18:0")
 
-fig_2b_plot_df %<>% mutate(label = ifelse(Metabolite.x %in% lfd_mets_to_label, Metabolite.x, "")) 
+fig_2b_plot_df %<>% mutate(label = ifelse(Standardized.name %in% lfd_mets_to_label, Standardized.name, "")) 
 ggplot(fig_2b_plot_df, aes(x = Metabolite_FC, y = NHSII_concordance, label = label, color = abs(NHSII_concordance - fc_scaled)))+
   geom_point(size  =4)+  geom_smooth(method = "lm", se = TRUE, color = "darkmagenta") +geom_label_repel(color = "black", size =6) +
   scale_color_viridis_c(option="plasma")+
@@ -258,24 +254,24 @@ ggplot(fig_2b_plot_df, aes(x = Metabolite_FC, y = NHSII_concordance, label = lab
 ```{r fig.width=8,fig.height=13}
 
 top_positive_concordance_mets_kd <- fig_2a_plot_df %>% 
-  select(NHSII_concordance, Metabolite.x) %>% 
+  select(NHSII_concordance, Standardized.name) %>% 
   arrange(desc(NHSII_concordance)) %>% 
-  .[1:4,] %>% .$Metabolite.x %>% 
+  .[1:4,] %>% .$Standardized.name %>% 
   unique() %>% 
   rev()
 
 fig2c_kd_top_pos_plot_df<- fig_2a_plot_df %>% 
-  select(NHSII_concordance, fc_scaled, Metabolite.x) %>% 
-  melt(id.vars =c("Metabolite.x")) %>% 
-  filter(Metabolite.x %in% top_positive_concordance_mets_kd) %>% 
+  select(NHSII_concordance, fc_scaled, Standardized.name) %>% 
+  melt(id.vars =c("Standardized.name")) %>% 
+  filter(Standardized.name %in% top_positive_concordance_mets_kd) %>% 
   mutate(variable = ifelse(variable == "NHSII_concordance", "NHSII Concordance", "Scaled Fold Change"))
 
-fig2c_kd_top_pos_plot_df$Metabolite.x <- 
-  factor(fig2c_kd_top_pos_plot_df$Metabolite.x, 
+fig2c_kd_top_pos_plot_df$Standardized.name <- 
+  factor(fig2c_kd_top_pos_plot_df$Standardized.name, 
          levels = top_positive_concordance_mets_kd)
 
 fig2c_kd_top_pos_plot <- ggplot(fig2c_kd_top_pos_plot_df,
-                                aes(x = value, y = Metabolite.x, color = variable)) +
+                                aes(x = value, y = Standardized.name, color = variable)) +
   geom_point(size =5) +
   scale_color_manual(values = palette[c(3,7)])+
   labs(
@@ -294,23 +290,23 @@ fig2c_kd_top_pos_plot <- ggplot(fig2c_kd_top_pos_plot_df,
   xlim(-0.8, 0.8)
 
 top_negative_concordance_mets_kd <- fig_2a_plot_df %>% 
-  select(NHSII_concordance, Metabolite.x) %>% 
+  select(NHSII_concordance, Standardized.name) %>% 
   arrange(NHSII_concordance) %>% 
-  .[1:8,] %>% .$Metabolite.x %>% 
+  .[1:8,] %>% .$Standardized.name %>% 
   unique()
 
 fig2c_kd_top_neg_plot_df<- fig_2a_plot_df %>% 
-  select(NHSII_concordance, fc_scaled, Metabolite.x) %>% 
-  melt(id.vars =c("Metabolite.x")) %>% 
-  filter(Metabolite.x %in% top_negative_concordance_mets_kd) %>% 
+  select(NHSII_concordance, fc_scaled, Standardized.name) %>% 
+  melt(id.vars =c("Standardized.name")) %>% 
+  filter(Standardized.name %in% top_negative_concordance_mets_kd) %>% 
   mutate(variable = ifelse(variable == "NHSII_concordance", "NHSII Concordance", "Scaled Fold Change"))
 
-fig2c_kd_top_neg_plot_df$Metabolite.x <- 
-  factor(fig2c_kd_top_neg_plot_df$Metabolite.x, 
+fig2c_kd_top_neg_plot_df$Standardized.name <- 
+  factor(fig2c_kd_top_neg_plot_df$Standardized.name, 
          levels = top_negative_concordance_mets_kd)
 
 fig2c_kd_top_neg_plot <- ggplot(fig2c_kd_top_neg_plot_df, 
-                            aes(x = value, y = Metabolite.x, color = variable)) +
+                            aes(x = value, y = Standardized.name, color = variable)) +
   geom_point(size =5) +
   scale_color_manual(values = palette[c(3,7)])+
   labs(
@@ -332,17 +328,17 @@ fig2c_kd_top_neg_plot <- ggplot(fig2c_kd_top_neg_plot_df,
 different_concordance_mets_kd <- kd_mets_to_label
 
 fig2c_kd_diff_plot_df<- fig_2a_plot_df %>% 
-  select(NHSII_concordance, fc_scaled, Metabolite.x) %>% 
-  melt(id.vars =c("Metabolite.x")) %>% 
-  filter(Metabolite.x %in% different_concordance_mets_kd) %>% 
+  select(NHSII_concordance, fc_scaled, Standardized.name) %>% 
+  melt(id.vars =c("Standardized.name")) %>% 
+  filter(Standardized.name %in% different_concordance_mets_kd) %>% 
   mutate(variable = ifelse(variable == "NHSII_concordance", "NHSII Concordance", "Scaled Fold Change"))
 
-fig2c_kd_diff_plot_df$Metabolite.x <- 
-  factor(fig2c_kd_diff_plot_df$Metabolite.x, 
+fig2c_kd_diff_plot_df$Standardized.name <- 
+  factor(fig2c_kd_diff_plot_df$Standardized.name, 
          levels = different_concordance_mets_kd)
 
 
-fig2c_kd_diff_plot <- ggplot(fig2c_kd_diff_plot_df, aes(x = value, y =Metabolite.x, color = variable)) +
+fig2c_kd_diff_plot <- ggplot(fig2c_kd_diff_plot_df, aes(x = value, y =Standardized.name, color = variable)) +
   geom_point(size =5) +
   scale_color_manual(values = palette[c(3,7)])+
   labs(
@@ -375,24 +371,24 @@ grid.draw(kd_combined_plot)
 # Figure 2d
 ```{r fig.width=8,fig.height=13}
 top_positive_concordance_mets_lfd <- fig_2b_plot_df %>% 
-  select(NHSII_concordance, Metabolite.x) %>% 
+  select(NHSII_concordance, Standardized.name) %>% 
   arrange(desc(NHSII_concordance)) %>% 
-  .[1:6,] %>% .$Metabolite.x %>% 
+  .[1:6,] %>% .$Standardized.name %>% 
   unique() %>% 
   rev()
 
 fig2d_lfd_top_pos_plot_df<- fig_2b_plot_df %>% 
-  select(NHSII_concordance, fc_scaled, Metabolite.x) %>% 
-  melt(id.vars =c("Metabolite.x")) %>% 
-  filter(Metabolite.x %in% top_positive_concordance_mets_lfd) %>% 
+  select(NHSII_concordance, fc_scaled, Standardized.name) %>% 
+  melt(id.vars =c("Standardized.name")) %>% 
+  filter(Standardized.name %in% top_positive_concordance_mets_lfd) %>% 
   mutate(variable = ifelse(variable == "NHSII_concordance", "NHSII Concordance", "Scaled Fold Change"))
 
-fig2d_lfd_top_pos_plot_df$Metabolite.x <- 
-  factor(fig2d_lfd_top_pos_plot_df$Metabolite.x, 
+fig2d_lfd_top_pos_plot_df$Standardized.name <- 
+  factor(fig2d_lfd_top_pos_plot_df$Standardized.name, 
          levels = top_positive_concordance_mets_lfd)
 
 fig2d_lfd_top_pos_plot <- ggplot(fig2d_lfd_top_pos_plot_df,
-                                aes(x = value, y = Metabolite.x, color = variable)) +
+                                aes(x = value, y = Standardized.name, color = variable)) +
   geom_point(size =5) +
   scale_color_manual(values = palette[c(3,7)])+
   labs(
@@ -411,23 +407,23 @@ fig2d_lfd_top_pos_plot <- ggplot(fig2d_lfd_top_pos_plot_df,
   xlim(-1, 1)
 
 top_negative_concordance_mets_lfd <- fig_2b_plot_df %>% 
-  select(NHSII_concordance, Metabolite.x) %>% 
+  select(NHSII_concordance, Standardized.name) %>% 
   arrange(NHSII_concordance) %>% 
-  .[1:9,] %>% .$Metabolite.x %>% 
+  .[1:9,] %>% .$Standardized.name %>% 
   unique()
 
 fig2d_lfd_top_neg_plot_df<- fig_2b_plot_df %>% 
-  select(NHSII_concordance, fc_scaled, Metabolite.x) %>% 
-  melt(id.vars =c("Metabolite.x")) %>% 
-  filter(Metabolite.x %in% top_negative_concordance_mets_lfd) %>% 
+  select(NHSII_concordance, fc_scaled, Standardized.name) %>% 
+  melt(id.vars =c("Standardized.name")) %>% 
+  filter(Standardized.name %in% top_negative_concordance_mets_lfd) %>% 
   mutate(variable = ifelse(variable == "NHSII_concordance", "NHSII Concordance", "Scaled Fold Change"))
 
-fig2d_lfd_top_neg_plot_df$Metabolite.x <- 
-  factor(fig2d_lfd_top_neg_plot_df$Metabolite.x, 
+fig2d_lfd_top_neg_plot_df$Standardized.name <- 
+  factor(fig2d_lfd_top_neg_plot_df$Standardized.name, 
          levels = top_negative_concordance_mets_lfd)
 
 fig2d_lfd_top_neg_plot <- ggplot(fig2d_lfd_top_neg_plot_df, 
-                                aes(x = value, y = Metabolite.x, color = variable)) +
+                                aes(x = value, y = Standardized.name, color = variable)) +
   geom_point(size =5) +
   scale_color_manual(values = palette[c(3,7)])+
   labs(
@@ -449,17 +445,17 @@ fig2d_lfd_top_neg_plot <- ggplot(fig2d_lfd_top_neg_plot_df,
 different_concordance_mets_lfd <- lfd_mets_to_label
 
 fig2d_lfd_diff_plot_df<- fig_2b_plot_df %>% 
-  select(NHSII_concordance, fc_scaled, Metabolite.x) %>% 
-  melt(id.vars =c("Metabolite.x")) %>% 
-  filter(Metabolite.x %in% different_concordance_mets_lfd) %>% 
+  select(NHSII_concordance, fc_scaled, Standardized.name) %>% 
+  melt(id.vars =c("Standardized.name")) %>% 
+  filter(Standardized.name %in% different_concordance_mets_lfd) %>% 
   mutate(variable = ifelse(variable == "NHSII_concordance", "NHSII Concordance", "Scaled Fold Change"))
 
-fig2d_lfd_diff_plot_df$Metabolite.x <- 
-  factor(fig2d_lfd_diff_plot_df$Metabolite.x, 
+fig2d_lfd_diff_plot_df$Standardized.name <- 
+  factor(fig2d_lfd_diff_plot_df$Standardized.name, 
          levels = different_concordance_mets_lfd)
 
 
-fig2d_lfd_diff_plot <- ggplot(fig2d_lfd_diff_plot_df, aes(x = value, y =Metabolite.x, color = variable)) +
+fig2d_lfd_diff_plot <- ggplot(fig2d_lfd_diff_plot_df, aes(x = value, y =Standardized.name, color = variable)) +
   geom_point(size =5) +
   scale_color_manual(values = palette[c(3,7)])+
   labs(
@@ -500,12 +496,11 @@ grid.draw(lfd_combined_plot)
 fig3_kd_plot_df <- merge(kd_merged, NHS2_mets_res_kd, by = "HMDB_ID") %>% 
   mutate(fc_fill = abs(scale(Metabolite_FC) - scale(coef)))
 
-fig3_kd_plot_df$Metabolite.x[fig3_kd_plot_df$Metabolite.x=="CAR(4:0(OH))"] <-"C4-OH carnitine"
-fig3_kd_plot_df$Metabolite.x[fig3_kd_plot_df$Metabolite.x=="PE(P-40:6)/PE(O-40:7)"] <-"Plasmalogen (40:6)"
 
-fig3_kd_mets_to_label <- c("TG(46:1)", "N-Oleoyl glycine", "Plasmalogen (40:6)", "LPC(20:1)", "CE(22:6)",  "C4-OH carnitine")
 
-fig3_kd_plot_df %<>% mutate(label = ifelse(Metabolite.x %in% fig3_kd_mets_to_label, Metabolite.x, "")) 
+fig3_kd_mets_to_label <- c("TG 46:1", "NA-Gly 18:1(9Z)",  "LPC 20:1", "CE 22:6",  "CAR 4:0;OH")
+
+fig3_kd_plot_df %<>% mutate(label = ifelse(Standardized.name %in% fig3_kd_mets_to_label, Standardized.name, "")) 
 
 fig3a_kd <- ggplot(fig3_kd_plot_df, aes(x=Metabolite_FC, y = coef, fill = fc_fill, label = label)) +
   geom_point(shape=21,cex = 5, color = "black") +
@@ -515,7 +510,12 @@ fig3a_kd <- ggplot(fig3_kd_plot_df, aes(x=Metabolite_FC, y = coef, fill = fc_fil
   annotate(geom="text", y = 0.17,x = -0.7, size=8,
            label =paste0("Pearson Correlation: ",
                          round(cor.test(fig3_kd_plot_df$Metabolite_FC,
-                                        fig3_kd_plot_df$coef)$estimate,3)))+
+                                        fig3_kd_plot_df$coef)$estimate,3),
+           "(", round(cor.test(fig3_kd_plot_df$Metabolite_FC,
+                                        fig3_kd_plot_df$coef)$conf.int[1],3),
+           ", ", round(cor.test(fig3_kd_plot_df$Metabolite_FC,
+                                        fig3_kd_plot_df$coef)$conf.int[2],3),
+           ")"))+
   theme_minimal()+
   theme(axis.text.x  =element_text(size =15),
         axis.text.y  =element_text(size = 15),
@@ -529,11 +529,9 @@ fig3a_kd <- ggplot(fig3_kd_plot_df, aes(x=Metabolite_FC, y = coef, fill = fc_fil
 fig3_lfd_plot_df <- merge(lfd_merged, NHS2_mets_res_lfd, by = "HMDB_ID") %>% 
   mutate(fc_fill = abs(scale(Metabolite_FC) - scale(coef)))
 
-fig3_lfd_plot_df$Metabolite.x[fig3_lfd_plot_df$Metabolite.x=="CAR(4:0(OH))"] <-"C4-OH carnitine"
+fig3_lfd_mets_to_label <- c("Biliverdin", "N1-Acetylspermidine", "NA-Gly 18:1(9Z)", "CE 22:6",  "CAR 4:0;OH", "Piperine", "Cotinine","TG 52:1","TG 52:0", "TG 50:0")
 
-fig3_lfd_mets_to_label <- c("Biliverdin", "N1-Acetylspermidine", "N-Oleoyl glycine", "CE(22:6)",  "C4-OH carnitine", "Piperine", "Cotinine","TG(52:1)","TG(52:0)", "TG(50:0)")
-
-fig3_lfd_plot_df %<>% mutate(label = ifelse(Metabolite.x %in% fig3_lfd_mets_to_label, Metabolite.x, "")) 
+fig3_lfd_plot_df %<>% mutate(label = ifelse(Standardized.name %in% fig3_lfd_mets_to_label, Standardized.name, "")) 
 
 
 fig3a_lfd <- ggplot(fig3_lfd_plot_df, aes(x=Metabolite_FC, y = coef, fill=fc_fill, label = label)) +
@@ -541,7 +539,12 @@ fig3a_lfd <- ggplot(fig3_lfd_plot_df, aes(x=Metabolite_FC, y = coef, fill=fc_fil
   annotate(geom="text", y = 0.17,x = -0.7, size=8,
            label =paste0("Pearson Correlation: ",
                          round(cor.test(fig3_lfd_plot_df$Metabolite_FC,
-                                        fig3_lfd_plot_df$coef)$estimate,3)))+
+                                        fig3_lfd_plot_df$coef)$estimate,3),
+           "(", round(cor.test(fig3_lfd_plot_df$Metabolite_FC,
+                                        fig3_lfd_plot_df$coef)$conf.int[1],3),
+           ", ", round(cor.test(fig3_lfd_plot_df$Metabolite_FC,
+                                        fig3_lfd_plot_df$coef)$conf.int[2],3),
+           ")"))+
   scale_fill_viridis_c(option = "plasma")+
   geom_label_repel(color = "black", fill = "white",size=6,
                    min.segment.length = unit(0, 'lines')) +

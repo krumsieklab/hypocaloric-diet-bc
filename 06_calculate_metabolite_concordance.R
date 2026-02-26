@@ -1,12 +1,5 @@
 # Calculation of concordance values for each metabolite in diet scores
 # And comparison of concordance values with fold changes
-library(dplyr)
-library(reshape)
-library(readxl)
-
-manuscript_folder <- 
-  "/udd/nhast/keto-metabolomics/SchweickartAnnalise_HypocaloricDiets_022025"
-
 load(paste0(manuscript_folder, 
             "/Processed_Data_and_Results/NHS_metadata_scores_df_maplet.Rdata"))
 load(paste0(manuscript_folder, 

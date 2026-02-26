@@ -138,9 +138,10 @@ log_reg_association <- function(
     data_for_assoc,
     model_type = c("linear", "quartile", "trend"),
     bmi, # Include or exclude BMI covariates
+    risk_factors = T, #Include or exclude risk factors
     conditional, # Conditional or unconditional
     meno = T
-    ){
+){
   
   # Conditional vs unconditional covars
   conditional_covars = "strata(matchid)"
@@ -155,24 +156,30 @@ log_reg_association <- function(
         "ageyr + as.factor(fast) + blddate"
     }
   }
-
-  # Set covariates based on inclusion of BMI variables
-  if(bmi){
-    covars = 
-    'act + as.factor(current.smk) + ahei_noal + alco + menage + 
-    as.factor(afbpar) + familyhx + bbddx + bmi18 + as.factor(changecat)'
-  }
-  else{
-    covars = 'act + as.factor(current.smk) + ahei_noal + alco +  
-    menage + as.factor(afbpar) + familyhx + bbddx'
-  }
-
+  
   # Set score type (continuous, categorical, medians)
   if(model_type == "linear"){ x = "scale(beta.score)" }
   else if(model_type == "quartile"){ x = "as.factor(beta.score.cat)" }
   else{ x = "beta.score.cat.median" }
   
-  form <- as.formula(glue("case ~ {x} + {conditional_covars} + {covars}"))
+  # Set covariates based on inclusion of risk and BMI variables
+  if(bmi){
+    covars = 
+      'act + as.factor(current.smk) + ahei_noal + alco + menage + 
+    as.factor(afbpar) + familyhx + bbddx + bmi18 + as.factor(changecat)'
+    form <- as.formula(glue("case ~ {x} + {conditional_covars} + {covars}"))
+  }
+  else if (risk_factors){
+    covars = 'act + as.factor(current.smk) + ahei_noal + alco +  
+    menage + as.factor(afbpar) + familyhx + bbddx'
+    form <- as.formula(glue("case ~ {x} + {conditional_covars} + {covars}"))
+  }
+  
+  
+  else{
+    form <- as.formula(glue("case ~ {x} + {conditional_covars}"))
+  }
+  
   
   # If conditional, use clogit with matchid
   if (conditional){  res <- clogit(formula = form, data = data_for_assoc) }
@@ -182,7 +189,6 @@ log_reg_association <- function(
   
   summary(res)
 }
-
 
 # Extract stats from regression model
 get_stats <- function(res, 
@@ -353,7 +359,7 @@ table_output <- function(data_for_assoc, title,
     
     # Continuous analysis no bmi
     continuous_res_no_bmi_1 <- data_for_assoc_1 %>% 
-      log_reg_association(model_type = "linear", bmi = F,
+      log_reg_association(model_type = "linear", bmi = F, 
                           conditional = conditional, meno=meno) 
     
     continuous_res_w_bmi_1 <- data_for_assoc_1 %>% 
@@ -373,14 +379,14 @@ table_output <- function(data_for_assoc, title,
                                               continuous_res_no_bmi_2)
     het_p_w_bmi <- get_heterogeneity_p_value(continuous_res_w_bmi_1,
                                               continuous_res_w_bmi_2)
-    table_df_1$group = rep(title1,2)
+    table_df_1$group = rep(title1,3)
     table_df_1$row = rownames(table_df_1)
     
-    table_df_2$group = rep(title2,2)
+    table_df_2$group = rep(title2,3)
     table_df_2$row = rownames(table_df_2)
     
     combined <- rbind(table_df_1, table_df_2)
-    combined$het_p <- c(het_p_no_bmi, het_p_w_bmi, NA, NA)
+    combined$het_p <- c(NA, het_p_no_bmi, het_p_w_bmi, NA, NA, NA)
     
     combined %<>% gt(rowname_col = "row", groupname_col = "group") %>% 
       tab_spanner(label = "Categorical OR (95% CI)", 
@@ -423,38 +429,56 @@ table_output <- function(data_for_assoc, title,
 make_base_stats_table <- function(data_for_assoc, conditional = T, meno = T){
   
   # Continuous analysis
+  continuous_res_no_bmi_no_risk <- data_for_assoc %>% 
+    log_reg_association(model_type = "linear", bmi = F, risk_factors = F,
+                        conditional = conditional, meno = meno) %>% 
+    get_stats(conditional = conditional)
+  
   continuous_res_no_bmi <- data_for_assoc %>% 
-    log_reg_association(model_type = "linear", bmi = F,
+    log_reg_association(model_type = "linear", bmi = F,risk_factors = T,
                         conditional = conditional, meno = meno) %>% 
     get_stats(conditional = conditional)
   
   continuous_res_w_bmi <- data_for_assoc %>% 
-    log_reg_association(model_type = "linear", bmi = T,
+    log_reg_association(model_type = "linear", bmi = T,risk_factors = T,
                         conditional = conditional, meno = meno) %>% 
     get_stats(conditional= conditional)
   
   # P-trend analysis
+  trend_p_no_bmi_no_risk <- data_for_assoc %>% 
+    log_reg_association(model_type = "trend", bmi = F, risk_factors = F,
+                        conditional = conditional, meno = meno) %>% 
+    
+    .$coefficients %>% .["beta.score.cat.median", "Pr(>|z|)"] %>% round(2)
+  
   trend_p_no_bmi <- data_for_assoc %>% 
-    log_reg_association(model_type = "trend", bmi = F,
+    log_reg_association(model_type = "trend", bmi = F, risk_factors = T,
                         conditional = conditional, meno = meno) %>% 
     
     .$coefficients %>% .["beta.score.cat.median", "Pr(>|z|)"] %>% round(2)
   
   trend_p_w_bmi <- data_for_assoc %>% 
-    log_reg_association(model_type = "trend", bmi = T,
+    log_reg_association(model_type = "trend", bmi = T, risk_factors = T,
                         conditional = conditional, meno = meno) %>%
     
     .$coefficients %>% .["beta.score.cat.median", "Pr(>|z|)"] %>% round(2)
   
   # Quartile analysis
+  quart_res_no_bmi_no_risk <- data_for_assoc %>% 
+    log_reg_association(model_type = "quartile", bmi = F, risk_factors = F,
+                        conditional = conditional, meno = meno) %>% 
+    
+    get_stats(model_type = "quartile", conditional = conditional)
+  
+  
   quart_res_no_bmi <- data_for_assoc %>% 
-    log_reg_association(model_type = "quartile", bmi = F,
+    log_reg_association(model_type = "quartile", bmi = F, risk_factors = T,
                         conditional = conditional, meno = meno) %>% 
     
     get_stats(model_type = "quartile", conditional = conditional)
   
   quart_res_w_bmi <- data_for_assoc %>% 
-    log_reg_association(model_type = "quartile", bmi = T,
+    log_reg_association(model_type = "quartile", bmi = T, risk_factors = T,
                         conditional = conditional, meno = meno) %>% 
     
     get_stats(model_type = "quartile", conditional = conditional)
@@ -465,10 +489,10 @@ make_base_stats_table <- function(data_for_assoc, conditional = T, meno = T){
     summarise("N cases/controls" = paste(Freq, collapse="/"))
   
   table_df <- cbind(
-    data.frame(Q1 = c("1.0 (ref)", "1.0 (ref)")),
-    bind_rows(quart_res_no_bmi, quart_res_w_bmi),
-    data.frame("P value of trend" = c(trend_p_no_bmi, trend_p_w_bmi)),
-    bind_rows(continuous_res_no_bmi, continuous_res_w_bmi))
+    data.frame(Q1 = c("1.0 (ref)", "1.0 (ref)", "1.0 (ref)")),
+    bind_rows(quart_res_no_bmi_no_risk, quart_res_no_bmi, quart_res_w_bmi),
+    data.frame("P value of trend" = c(trend_p_no_bmi_no_risk, trend_p_no_bmi, trend_p_w_bmi)),
+    bind_rows(continuous_res_no_bmi_no_risk, continuous_res_no_bmi, continuous_res_w_bmi))
   
   # names(table_df)<- c(paste0(names(table_df)[1:4], " (",
   #                            quart_counts$`N cases/controls`, ")"), 
@@ -478,7 +502,7 @@ make_base_stats_table <- function(data_for_assoc, conditional = T, meno = T){
   names(table_df)<- c("Q1", "Q2","Q3","Q4", 
                       "P-value of trend",
                       names(table_df)[6:7])
-  rownames(table_df)<- c("Model 1", "Model 2")
+  rownames(table_df)<- c("Model 1", "Model 2", "Model 3")
   
   table_df
 }

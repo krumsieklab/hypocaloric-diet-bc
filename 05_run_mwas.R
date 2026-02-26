@@ -1,10 +1,4 @@
-# inputs
-library(Biobase)
-library(dplyr)
-
-manuscript_folder <- 
-  "/udd/nhast/keto-metabolomics/SchweickartAnnalise_HypocaloricDiets_022025"
-
+# Runs MWAS of metabolites with breast cancer outcome
 
 betas_first <- paste0(manuscript_folder, 
                       "/Processed_Data_and_Results/filtered_betas.xlsx")
