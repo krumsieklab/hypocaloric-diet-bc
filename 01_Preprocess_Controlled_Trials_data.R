@@ -1,9 +1,5 @@
 # Load and preprocess controlled trials data measured on
 # Broad metabolomics platform 
-setwd("~/keto-metabolomics/SchweickartAnnalise_HypocaloricDiets_022025")
-library(dplyr)
-library(maplet)
-manuscript_folder <- "/udd/nhast/keto-metabolomics/SchweickartAnnalise_HypocaloricDiets_022025"
 
 
 #######################################
@@ -32,7 +28,6 @@ LM_standardized_names_file <-
 # Write out processed datasets
 
 known_mets_control_file <- 
-  paste0(manuscript_folder, "/Processed_Data_and_Results/processed_control_known_metabolites.xlsx")
   paste0(manuscript_folder, 
          "/Processed_Data_and_Results/processed_control_known_metabolites.xlsx")
 
@@ -539,7 +534,8 @@ only_known_controls <-  function(){
   combined_rows <- do.call("rbind",list(data.frame(rowData(hilic_pos)),
                                         data.frame(rowData(c8_pos)),
                                         data.frame(rowData(hilic_neg)),
-                                        data.frame(rowData(c18_neg))))
+                                        data.frame(rowData(c18_neg)))) %>% 
+    left_join(read.csv(LM_standardized_names_file) %>% 
                 distinct(), by = "Metabolite")
   
   combined_SE<-SummarizedExperiment(assays=combined_assay, 
