@@ -7,14 +7,14 @@
 #######################################
 
 # Raw Broad Metabolomics files of the Control Ketogenic Diet Studies
-# Makker is the endometrial cancer cohort
-# STAK is the weight loss cohort
+# MSK is the endometrial cancer cohort
+# OSU is the weight loss cohort
 
-Makker_raw <- paste0(manuscript_folder, "/Input_Data/Makker.xlsx")
-STAK_raw <- paste0(manuscript_folder, "/Input_Data/STAK.xlsx")
+MSK_raw <- paste0(manuscript_folder, "/Input_Data/MSK.xlsx")
+OSU_raw <- paste0(manuscript_folder, "/Input_Data/OSU.xlsx")
 
-# STAK metadata
-STAK_metadata_file <- paste0(manuscript_folder, "/Input_Data/Metagenics Data Update for Dr. Volek.xlsx")
+# OSU metadata
+OSU_metadata_file <- paste0(manuscript_folder, "/Input_Data/OSU_Metadata.xlsx")
 Broad_Annotations_file <- paste0(manuscript_folder, "/Input_Data/Broad_Metabolomics_Annotations.xlsx")
 
 # NHS-Control Alignment files for HILIC-pos and C8-pos metabolites
@@ -92,12 +92,12 @@ filter_repeat_hmdbs <- function(SE){
 #' @param D SummarizedExperiment object into which to write (optional)
 #' @param file File name of the excel sheet to read in
 #' @param sheet Sheet name to read in (these are generally separated based on LC platform)
-#' @param study Which study this file comes from, either Makker or STAK
+#' @param study Which study this file comes from, either MSK or OSU
 #'
 #' @return SummarizedExperiment containing raw data, sample and molecular annotations
 #'
 #' @noRd
-load_broad <-function (D, file, sheet, study = c("Makker", "STAK")) 
+load_broad <-function (D, file, sheet, study = c("MSK", "OSU")) 
 {
   # Read in the raw data
   result = list()
@@ -148,8 +148,8 @@ load_broad <-function (D, file, sheet, study = c("Makker", "STAK"))
   result$sampleinfo$Sex<- get_sample_metadata(study, result$sampleinfo$Subject, type = "sex")
   
   
-  # Annotate samples with their week (needs to be parsed out in STAK)
-  if (study=="STAK"){
+  # Annotate samples with their week (needs to be parsed out in OSU)
+  if (study=="OSU"){
     result$sampleinfo$Week <- sapply(result$sampleinfo$Sample, function(i) strsplit(i,"K")[[1]][2])
   }
   
@@ -164,7 +164,7 @@ load_broad <-function (D, file, sheet, study = c("Makker", "STAK"))
 
 #' Assign diet to study subjects
 #'
-#' Check following file for STAK assignments:
+#' Check following file for OSU assignments:
 #' Metagenics Data Update for Dr. Volek.xlsx
 #' Following information is from Marcus (all subjects are Female):
 #' Diet       Study ID
@@ -180,7 +180,7 @@ load_broad <-function (D, file, sheet, study = c("Makker", "STAK"))
 #'  KD          10
 #'  KD          11
 #'  KD          12
-#' @param study Name of study (Makker or STAK)
+#' @param study Name of study (MSK or OSU)
 #' @param name_vec Vector of subject ids
 #' @param type Either "diet" or sex"
 #'
@@ -193,31 +193,31 @@ get_sample_metadata <- function(
     type = c("diet", "sex")
 ){
   
-  # If Makker, manually assign diet, all sex is F
-  if (study=="Makker"){
+  # If MSK, manually assign diet, all sex is F
+  if (study=="MSK"){
     if (type == "diet"){
-      Makker_SD<- c("\"02\"","\"03\"","\"07\"","\"08\"")
-      return(unlist(lapply(name_vec,function(i){ if (i %in% Makker_SD){return ("LFD")}else{return("KD")}})))
+      MSK_SD<- c("\"02\"","\"03\"","\"07\"","\"08\"")
+      return(unlist(lapply(name_vec,function(i){ if (i %in% MSK_SD){return ("LFD")}else{return("KD")}})))
     }
     else{
       return(rep("F", length(name_vec)))
     }
   }
   
-  # If STAK, pull metadata from original datafiles and map
+  # If OSU, pull metadata from original datafiles and map
   else{
-    STAK_metadata <- readxl::read_xlsx(STAK_metadata_file,
-                                       sheet="Raw Chart - No Estimated Means") %>% 
+    OSU_metadata <- readxl::read_xlsx(OSU_metadata_file,
+                                      sheet="Raw Chart - No Estimated Means") %>% 
       select(ID, GROUP, SEX) %>% 
       mutate(DIET = case_when(GROUP == "SUPP" ~ "KD", GROUP == "PLAC" ~ "KD",
                               GROUP == "LF" ~ "LFD"))
-    STAK_metadata$Subject <- lapply(STAK_metadata$ID, function(i) as.numeric(str_split(i, " ")[[1]][2]))
+    OSU_metadata$Subject <- lapply(OSU_metadata$ID, function(i) as.numeric(str_split(i, " ")[[1]][2]))
     
     if (type == "diet"){
-      return(STAK_metadata$DIET[match(name_vec, STAK_metadata$Subject)])
+      return(OSU_metadata$DIET[match(name_vec, OSU_metadata$Subject)])
     }
     else{
-      return(STAK_metadata$SEX[match(name_vec, STAK_metadata$Subject)])
+      return(OSU_metadata$SEX[match(name_vec, OSU_metadata$Subject)])
     }
   }
   
@@ -244,33 +244,33 @@ preprocess_broad_data <- function(D){
     
     # Filter out metabolites with over 25% missingness
     mt_pre_filter_missingness(feat_max=0.25) %>%
-    
+
     # Filter out metabolites with cv greater than 25%
     mt_modify_filter_features(QC_cv <0.25) %>%
-    
+
     #Filter out samples with over 25% missingness
     mt_pre_filter_missingness(samp_max=0.25) %>%
-    
+
     #Quotient Normalize
     mt_pre_norm_quot() %>%
-    
-    mt_plots_dilution_factor(in_col = "Subject") %>% 
-    
+
+    mt_plots_dilution_factor(in_col = "Subject") %>%
+
     #Log transform
     mt_pre_trans_log() %>%
-    
+
     # metabolic outlier detection followed by imputation
-    mt_pre_outlier_to_na() %>% 
-    
+    mt_pre_outlier_to_na() %>%
+
     # Filter out metabolites with over 25% missingness
     mt_pre_filter_missingness(feat_max=0.25) %>%
-    
+
     #Impute NAs
-    mt_pre_impute_knn() %>% 
-    
+    mt_pre_impute_knn() %>%
+
     # Scale data
-    mt_pre_trans_scale() 
-    
+    mt_pre_trans_scale()
+  
   
   processed_dat
 }
@@ -281,7 +281,7 @@ preprocess_broad_data <- function(D){
 #'
 #' Removes metabolites that show significant differences in the first week
 #' 
-#' @param combined_SE SummarizedExperiment containing processed STAK and Makker data
+#' @param combined_SE SummarizedExperiment containing processed OSU and MSK data
 
 #'
 #' @return SummarizedExperiment with metabolites that have first week differences removed
@@ -291,8 +291,8 @@ quality_check <- function(
     combined_SE
 ){
   
-  stak_dat<- combined_SE[,combined_SE$Sample_type=="Sample-STAK"]
-  makker_dat<- combined_SE[,combined_SE$Sample_type=="Sample-Makker"]
+  OSU_dat<- combined_SE[,combined_SE$Sample_type=="Sample-STAK"]
+  MSK_dat<- combined_SE[,combined_SE$Sample_type=="Sample-Makker"]
   
   # Don't want metabolites that significantly differ in first week (unreliable measurement)
   kd_0<-intersect(which(combined_SE$Diet =="KD"),which(combined_SE$Week ==0))
@@ -308,7 +308,7 @@ quality_check <- function(
 
 
 
-#' Loads, processes, and combines the control platforms (Makker and STAK)
+#' Loads, processes, and combines the control platforms (MSK and OSU)
 #'
 #' Filters for identified metabolites (that have HMDB IDs) leaving only known metabolites
 #' Combines those metabolites with NHS identifiers
@@ -322,35 +322,35 @@ only_known_controls <-  function(){
   # This maps known metabolites from the NHS data to the control data
   HP_align <- read.csv(HP_align_file)
   
-  Makker_hilic_pos<-load_broad(file=Makker_raw, 
-                               sheet="HILIC-pos",
-                               study= "Makker")
+  MSK_hilic_pos<-load_broad(file=MSK_raw, 
+                            sheet="HILIC-pos",
+                            study= "MSK")
   
-  rowData(Makker_hilic_pos)<- rowData(Makker_hilic_pos)[,c("HMDB_ID",
-                                                           "Metabolite",
-                                                           "Compound_ID")]
+  rowData(MSK_hilic_pos)<- rowData(MSK_hilic_pos)[,c("HMDB_ID",
+                                                     "Metabolite",
+                                                     "Compound_ID")]
   
-  names(rowData(Makker_hilic_pos))<- c("HMDB_ID","Metabolite", "Makker_ID")
+  names(rowData(MSK_hilic_pos))<- c("HMDB_ID","Metabolite", "MSK_ID")
   
-  colData(Makker_hilic_pos)<- colData(Makker_hilic_pos)[,c("Sample_type","Sex",
-                                                           "BMI","Subject",
-                                                           "Name","Diet",'Week')]
+  colData(MSK_hilic_pos)<- colData(MSK_hilic_pos)[,c("Sample_type","Sex",
+                                                     "BMI","Subject",
+                                                     "Name","Diet",'Week')]
   
-  STAK_hilic_pos<-load_broad(file=STAK_raw, 
-                             sheet="HILIC-pos",
-                             study= "STAK")
+  OSU_hilic_pos<-load_broad(file=OSU_raw, 
+                            sheet="HILIC-pos",
+                            study= "OSU")
   
-  rowData(STAK_hilic_pos)<- rowData(STAK_hilic_pos)[,c("HMDB_ID",
-                                                       "Metabolite", 
-                                                       "Compound_ID")]
+  rowData(OSU_hilic_pos)<- rowData(OSU_hilic_pos)[,c("HMDB_ID",
+                                                     "Metabolite", 
+                                                     "Compound_ID")]
   
-  names(rowData(STAK_hilic_pos))<- c("HMDB_ID","Metabolite", "STAK_ID")
+  names(rowData(OSU_hilic_pos))<- c("HMDB_ID","Metabolite", "OSU_ID")
   
-  colData(STAK_hilic_pos)<- colData(STAK_hilic_pos)[,c("Sample_type","Sex",
-                                                       "BMI","Subject",
-                                                       "Name","Diet",'Week')]
+  colData(OSU_hilic_pos)<- colData(OSU_hilic_pos)[,c("Sample_type","Sex",
+                                                     "BMI","Subject",
+                                                     "Name","Diet",'Week')]
   
-  hilic_pos<- cbind(Makker_hilic_pos,STAK_hilic_pos) %>%  
+  hilic_pos<- cbind(MSK_hilic_pos,OSU_hilic_pos) %>%  
     
     mt_pre_cv(Sample_type=="QC-pooled_plasma", out_col = "QC_cv")%>%
     
@@ -358,7 +358,7 @@ only_known_controls <-  function(){
   
   rowData(hilic_pos)$row_order <- 1:nrow(hilic_pos)
   merged_row_data <- merge(data.frame(rowData(hilic_pos)), HP_align, 
-                           by.x = "STAK_ID", by.y = "Compound_ID_STAK",
+                           by.x = "OSU_ID", by.y = "Compound_ID_OSU",
                            all.x = T)
   rowData(hilic_pos) <- merged_row_data[order(merged_row_data$row_order),]
   
@@ -371,7 +371,7 @@ only_known_controls <-  function(){
                     rowData(hilic_pos)$Metabolite.y)
   
   rowData(hilic_pos) %<>% data.frame() %>% 
-    dplyr::select(STAK_ID, Makker_ID, QC_cv, HMDB_ID, Metabolite)
+    dplyr::select(OSU_ID, MSK_ID, QC_cv, HMDB_ID, Metabolite)
   
   hilic_pos <- hilic_pos[!is.na(rowData(hilic_pos)$HMDB_ID),]
   hilic_pos <- hilic_pos[!(rowData(hilic_pos)$HMDB_ID %in% 
@@ -386,33 +386,33 @@ only_known_controls <-  function(){
   # Read in HMDB information from NHS data for CP platform
   CP_align <- read.csv(CP_align_file)
   
-  Makker_c8_pos<-load_broad(file=Makker_raw, 
-                            sheet="C8-pos",
-                            study= "Makker")
+  MSK_c8_pos<-load_broad(file=MSK_raw, 
+                         sheet="C8-pos",
+                         study= "MSK")
   
-  rowData(Makker_c8_pos)<- rowData(Makker_c8_pos)[,c("HMDB_ID",
-                                                     "Metabolite",
-                                                     "Compound_ID")]
+  rowData(MSK_c8_pos)<- rowData(MSK_c8_pos)[,c("HMDB_ID",
+                                               "Metabolite",
+                                               "Compound_ID")]
   
-  names(rowData(Makker_c8_pos))<- c("HMDB_ID","Metabolite", "Makker_ID")
+  names(rowData(MSK_c8_pos))<- c("HMDB_ID","Metabolite", "MSK_ID")
   
-  colData(Makker_c8_pos)<- colData(Makker_c8_pos)[,c("Sample_type","Sex",
-                                                     "BMI", "Subject","Name",
-                                                     "Diet",'Week')]
+  colData(MSK_c8_pos)<- colData(MSK_c8_pos)[,c("Sample_type","Sex",
+                                               "BMI", "Subject","Name",
+                                               "Diet",'Week')]
   
-  STAK_c8_pos<-load_broad(file=STAK_raw, 
-                          sheet="C8-pos",
-                          study= "STAK")
+  OSU_c8_pos<-load_broad(file=OSU_raw, 
+                         sheet="C8-pos",
+                         study= "OSU")
   
-  rowData(STAK_c8_pos)<- rowData(STAK_c8_pos)[,c("Metabolite", "Compound_ID")]
+  rowData(OSU_c8_pos)<- rowData(OSU_c8_pos)[,c("Metabolite", "Compound_ID")]
   
-  names(rowData(STAK_c8_pos))<- c("Metabolite", "STAK_ID")
+  names(rowData(OSU_c8_pos))<- c("Metabolite", "OSU_ID")
   
-  colData(STAK_c8_pos)<- colData(STAK_c8_pos)[,c("Sample_type","Sex",
-                                                 "BMI","Subject",
-                                                 "Name","Diet",'Week')]
+  colData(OSU_c8_pos)<- colData(OSU_c8_pos)[,c("Sample_type","Sex",
+                                               "BMI","Subject",
+                                               "Name","Diet",'Week')]
   
-  c8_pos<- cbind(Makker_c8_pos,STAK_c8_pos) %>%  
+  c8_pos<- cbind(MSK_c8_pos,OSU_c8_pos) %>%  
     
     mt_pre_cv(Sample_type=="QC-pooled_plasma", out_col = "QC_cv")%>%
     
@@ -420,7 +420,7 @@ only_known_controls <-  function(){
   
   rowData(c8_pos)$row_order <- 1:nrow(c8_pos)
   merged_row_data <- merge(data.frame(rowData(c8_pos)), HP_align, 
-                           by.x = "STAK_ID", by.y = "Compound_ID_STAK", 
+                           by.x = "OSU_ID", by.y = "Compound_ID_OSU", 
                            all.x = T)
   rowData(c8_pos) <- merged_row_data[order(merged_row_data$row_order),]
   
@@ -432,7 +432,7 @@ only_known_controls <-  function(){
                                                 rowData(c8_pos)$Metabolite.y)
   
   rowData(c8_pos) %<>% data.frame() %>% 
-    dplyr::select(STAK_ID, Makker_ID, QC_cv, HMDB_ID, Metabolite)
+    dplyr::select(OSU_ID, MSK_ID, QC_cv, HMDB_ID, Metabolite)
   
   c8_pos <- c8_pos[!is.na(rowData(c8_pos)$HMDB_ID),]
   c8_pos <- c8_pos[!(rowData(c8_pos)$HMDB_ID %in% c("NA","redundant ion", 
@@ -443,33 +443,34 @@ only_known_controls <-  function(){
   rownames(rowData(c8_pos)) <- rownames(c8_pos)
   
   ##HILIC-neg
-  Makker_hilic_neg<-load_broad(file=Makker_raw, 
-                               sheet="HILIC-neg",
-                               study= "Makker")
+  MSK_hilic_neg<-load_broad(file=MSK_raw, 
+                            sheet="HILIC-neg",
+                            study= "MSK")
   
-  rowData(Makker_hilic_neg)<- rowData(Makker_hilic_neg)[,c("HMDB_ID",
-                                                           "Metabolite",
-                                                           "Compound_ID")]
+  rowData(MSK_hilic_neg)<- rowData(MSK_hilic_neg)[,c("HMDB_ID",
+                                                     "Metabolite",
+                                                     "Compound_ID")]
   
-  names(rowData(Makker_hilic_neg))<- c("HMDB_ID","Metabolite", "Makker_ID")
+  names(rowData(MSK_hilic_neg))<- c("HMDB_ID","Metabolite", "MSK_ID")
   
-  colData(Makker_hilic_neg)<- colData(Makker_hilic_neg)[,c("Sample_type","Sex",
-                                                           "BMI","Subject",
-                                                           "Name","Diet",'Week')]
+  colData(MSK_hilic_neg)<- colData(MSK_hilic_neg)[,c("Sample_type","Sex",
+                                                     "BMI","Subject",
+                                                     "Name","Diet",'Week')]
   
-  STAK_hilic_neg<-load_broad(file=STAK_raw, 
-                             sheet="HILIC-neg",
-                             study= "STAK")
+  OSU_hilic_neg<-load_broad(file=OSU_raw, 
+                            sheet="HILIC-neg",
+                            study= "OSU")
   
-  rowData(STAK_hilic_neg)<- rowData(STAK_hilic_neg)[,c("Metabolite", "Compound_ID")]
+  rowData(OSU_hilic_neg)<- rowData(OSU_hilic_neg)[,c("Metabolite", "Compound_ID")]
   
-  names(rowData(STAK_hilic_neg))<- c("Metabolite", "STAK_ID")
+  names(rowData(OSU_hilic_neg))<- c("Metabolite", "OSU_ID")
   
-  colData(STAK_hilic_neg)<- colData(STAK_hilic_neg)[,c("Sample_type","Sex",
-                                                       "BMI","Subject",
-                                                       "Name","Diet",'Week')]
+  colData(OSU_hilic_neg)<- colData(OSU_hilic_neg)[,c("Sample_type","Sex",
+                                                     "BMI","Subject",
+                                                     "Name","Diet",'Week')]
+  identical(rownames(MSK_hilic_neg), rownames(OSU_hilic_neg))
   
-  hilic_neg<- cbind(Makker_hilic_neg,STAK_hilic_neg) %>%  
+  hilic_neg<- cbind(MSK_hilic_neg,OSU_hilic_neg) %>%  
     
     mt_pre_cv(Sample_type=="QC-pooled_plasma", out_col = "QC_cv")%>%
     
@@ -486,32 +487,32 @@ only_known_controls <-  function(){
   rownames(rowData(hilic_neg)) <- rownames(hilic_neg)
   
   ##C18-neg
-  Makker_c18_neg<-load_broad(file=Makker_raw, 
-                             sheet="C18-neg",
-                             study= "Makker")
+  MSK_c18_neg<-load_broad(file=MSK_raw, 
+                          sheet="C18-neg",
+                          study= "MSK")
   
-  rowData(Makker_c18_neg)<- rowData(Makker_c18_neg)[,c("HMDB_ID","Metabolite", 
-                                                       "Compound_ID")]
+  rowData(MSK_c18_neg)<- rowData(MSK_c18_neg)[,c("HMDB_ID","Metabolite", 
+                                                 "Compound_ID")]
   
-  names(rowData(Makker_c18_neg))<- c("HMDB_ID","Metabolite", "Makker_ID")
+  names(rowData(MSK_c18_neg))<- c("HMDB_ID","Metabolite", "MSK_ID")
   
-  colData(Makker_c18_neg)<- colData(Makker_c18_neg)[,c("Sample_type","Sex",
-                                                       "BMI","Subject",
-                                                       "Name","Diet",'Week')]
+  colData(MSK_c18_neg)<- colData(MSK_c18_neg)[,c("Sample_type","Sex",
+                                                 "BMI","Subject",
+                                                 "Name","Diet",'Week')]
   
-  STAK_c18_neg<-load_broad(file=STAK_raw, 
-                           sheet="C18-neg",
-                           study= "STAK")
+  OSU_c18_neg<-load_broad(file=OSU_raw, 
+                          sheet="C18-neg",
+                          study= "OSU")
   
-  rowData(STAK_c18_neg)<- rowData(STAK_c18_neg)[,c("Metabolite", "Compound_ID")]
+  rowData(OSU_c18_neg)<- rowData(OSU_c18_neg)[,c("Metabolite", "Compound_ID")]
   
-  names(rowData(STAK_c18_neg))<- c("Metabolite", "STAK_ID")
+  names(rowData(OSU_c18_neg))<- c("Metabolite", "OSU_ID")
   
-  colData(STAK_c18_neg)<- colData(STAK_c18_neg)[,c("Sample_type","Sex",
-                                                   "BMI","Subject","Name",
-                                                   "Diet",'Week')]
+  colData(OSU_c18_neg)<- colData(OSU_c18_neg)[,c("Sample_type","Sex",
+                                                 "BMI","Subject","Name",
+                                                 "Diet",'Week')]
   
-  c18_neg<- cbind(Makker_c18_neg,STAK_c18_neg) %>%  
+  c18_neg<- cbind(MSK_c18_neg,OSU_c18_neg) %>%  
     
     mt_pre_cv(Sample_type=="QC-pooled_plasma", out_col = "QC_cv")%>%
     
@@ -541,7 +542,7 @@ only_known_controls <-  function(){
   combined_SE<-SummarizedExperiment(assays=combined_assay, 
                                     colData= colData(hilic_pos), 
                                     rowData=combined_rows) %>% 
-    # Filter out subject 11 from Makker, only has first week
+    # Filter out subject 11 from MSK, only has first week
     maplet::mt_modify_filter_samples(filter=  Subject!= "\"11\"") %>% 
     preprocess_broad_data() %>% 
     mt_pre_confounding_correction(formula = ~BMI+Sex) %>% 
@@ -592,8 +593,8 @@ adjusted_data <- ComBat(dat=assay(KD_knowns_D), batch=batch,
 
 
 KD_batch_corrected <- SummarizedExperiment(assays = adjusted_data,
-                                            colData = colData(KD_knowns_D),
-                                            rowData = rowData(KD_knowns_D))
+                                           colData = colData(KD_knowns_D),
+                                           rowData = rowData(KD_knowns_D))
 
 ##### Data Saving #####
 
